@@ -36,7 +36,8 @@ python3 examples/build.py
 
 文件示例通过 Windows 接口创建 `example.txt`、写入、关闭、重新打开并读取，再输出读到的内容。
 窗口示例调用 `MessageBoxW`；仅在有正常桌面会话的 macOS 上尝试，窗口验证状态见上文。
-示例是手工构建的真实 PE/机器码文件，Windows 本机上的执行结果尚未交叉验证。
+示例是手工构建的真实 PE/机器码文件。控制台、文件与 TLS 示例已在 Windows CI 上原生交叉验证；
+窗口示例尚未完成 Windows / macOS 的可见界面验证。
 
 `--root` 指定当前实现所映射的 Windows C: 盘根目录。目录的上一级必须存在。
 不提供 `--root` 时使用当前目录下的 `leanwin-drive`。
@@ -121,6 +122,8 @@ python tools/smoke.py --output reports/windows-native.json
 ```
 
 GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 6 项原生执行检查。
+2026-10-25 的[首次跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40173962767)全部通过，
+结果记录在 [reports/ci.json](reports/ci.json)。本机 `validation.json` 仅记录本机检查，Windows 结果由独立 CI 任务提供。
 每次运行的真实结果与报告以仓库的 [Actions](https://github.com/MoFanMon/LeanWin/actions) 为准。
 
 ## 结构与下一步
@@ -136,7 +139,7 @@ Windows 接口 → POSIX 文件/进程接口
              → AppKit 窗口模块       src/gui.m（按需加载）
 ```
 
-1. 增加编译器生成的 Win32 测试程序，并在真实 Windows 上交叉验证示例与接口语义。
+1. 增加编译器生成的 Win32 测试程序，并扩展真实 Windows 上的接口语义与界面验证。
 2. 补全基础加载环境：PEB/TEB、TLS 生命周期与动态分配、重定位、异常、堆与线程同步；避免依赖“总能加载在首选基址”的假设。
 3. 扩充整数和 SIMD 指令覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
 4. 实现真实窗口、消息循环和 GDI，再扩展通用控件、注册表、COM 与进程间协作。
