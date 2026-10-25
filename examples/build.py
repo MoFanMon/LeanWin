@@ -72,7 +72,12 @@ class Program:
         elif index < 4:
             self.mov([1, 2, 8, 9][index], value)
         else:
-            self.emit(b"\x48\xc7\x44\x24" + bytes([32 + (index - 4) * 8]) + struct.pack("<i", value))
+            displacement = bytes([32 + (index - 4) * 8])
+            if -(1 << 31) <= value < (1 << 31):
+                self.emit(b"\x48\xc7\x44\x24" + displacement + struct.pack("<i", value))
+            else:
+                self.mov(0, value)
+                self.emit(b"\x48\x89\x44\x24" + displacement)
 
     def invoke(self, name, values):
         indexes = range(len(values) - 1, -1, -1) if self.bits == 32 else range(len(values))

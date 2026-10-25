@@ -210,13 +210,8 @@
   "file": "DeepSeekQQ-Setup.exe",
   "status": "blocked",
   "static_import_entries": 153,
-  "known_name_entries": 13,
+  "known_name_entries": 18,
   "missing_entries": [
-    {
-      "dll": "kernel32.dll",
-      "name": "GetACP",
-      "delayed": false
-    },
     {
       "dll": "kernel32.dll",
       "name": "GetExitCodeProcess",
@@ -264,11 +259,6 @@
     },
     {
       "dll": "kernel32.dll",
-      "name": "GetCPInfoExW",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
       "name": "CompareStringOrdinal",
       "delayed": false
     },
@@ -280,11 +270,6 @@
     {
       "dll": "kernel32.dll",
       "name": "SetFilePointerEx",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "name": "GetCPInfo",
       "delayed": false
     },
     {
@@ -559,17 +544,7 @@
     },
     {
       "dll": "kernel32.dll",
-      "name": "WideCharToMultiByte",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
       "name": "FindClose",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "name": "MultiByteToWideChar",
       "delayed": false
     },
     {
@@ -915,7 +890,7 @@
   ],
   "runtime_attempt": {
     "exit_code": 65,
-    "error": "leanwin: unimplemented import kernel32.dll!GetACP",
+    "error": "leanwin: unimplemented import kernel32.dll!GetExitCodeProcess",
     "stage": "import-binding",
     "guest_instructions_executed": 0,
     "installer_tls_validation": "NOT REACHED: imports must bind before TLS is prepared"

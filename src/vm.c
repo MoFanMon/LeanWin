@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MIT. Original, deliberately limited x86 interpreter. */
 #include "vm.h"
+#include "nls.h"
 #include <ctype.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -48,14 +49,17 @@ typedef struct { bool reg, relative; unsigned index; uint64_t address; } operand
 typedef struct { const char *name; unsigned argc; bool user; } api;
 enum { EXIT_PROCESS, GET_STD_HANDLE, WRITE_FILE, READ_FILE, CREATE_FILE, CLOSE_HANDLE,
        GET_LAST_ERROR, SET_LAST_ERROR, GET_TICK_COUNT64, GET_PROCESS_ID, GET_FILE_SIZE,
-       GET_MODULE_HANDLE, LOAD_LIBRARY, GET_PROC_ADDRESS, MESSAGE_BOX, API_COUNT };
+       GET_MODULE_HANDLE, LOAD_LIBRARY, GET_PROC_ADDRESS, MESSAGE_BOX,
+       GET_ACP, GET_CP_INFO, GET_CP_INFO_EX, MULTIBYTE_TO_WIDE, WIDE_TO_MULTIBYTE, API_COUNT };
 static const api apis[] = {
     {"ExitProcess",1,false}, {"GetStdHandle",1,false}, {"WriteFile",5,false},
     {"ReadFile",5,false}, {"CreateFileW",7,false}, {"CloseHandle",1,false},
     {"GetLastError",0,false}, {"SetLastError",1,false}, {"GetTickCount64",0,false},
     {"GetCurrentProcessId",0,false}, {"GetFileSizeEx",2,false},
     {"GetModuleHandleW",1,false}, {"LoadLibraryW",1,false},
-    {"GetProcAddress",2,false}, {"MessageBoxW",4,true}
+    {"GetProcAddress",2,false}, {"MessageBoxW",4,true},
+    {"GetACP",0,false}, {"GetCPInfo",2,false}, {"GetCPInfoExW",3,false},
+    {"MultiByteToWideChar",6,false}, {"WideCharToMultiByte",8,false}
 };
 
 static void fault(vm *v, const char *format, ...)
@@ -408,6 +412,40 @@ static int show_dialog(vm *v, const char *text, const char *title)
     (void)text; (void)title; fault(v, "MessageBoxW backend requires macOS"); return 0;
 #endif
 }
+static uint64_t convert_string(vm *v, uint64_t *a, bool to_wide)
+{
+    uint32_t cp = (uint32_t)a[0], flags = (uint32_t)a[1];
+    int32_t input_count = (int32_t)a[3], capacity = (int32_t)a[5];
+    unsigned source_width = to_wide ? 1 : 2, dest_width = to_wide ? 2 : 1;
+    const size_t limit = 16U * 1024U * 1024U;
+    if ((cp && cp != LW_ANSI_CODE_PAGE) || !a[2] || input_count == 0 || input_count < -1 ||
+        capacity < 0 || (capacity && !a[4]) || (uint64_t)capacity > limit / dest_width ||
+        (!to_wide && (a[6] || a[7]))) { v->last_error = 87; return 0; }
+    if (flags && flags != (to_wide ? 8U : 128U)) { v->last_error = 1004; return 0; }
+    size_t count = 0;
+    if (input_count == -1) {
+        bool terminated = false;
+        while (count < limit / source_width) {
+            uint64_t value = read_mem(v, a[2] + count++ * source_width, source_width);
+            if (v->failed) return 0;
+            if (!value) { terminated = true; break; }
+        }
+        if (!terminated) { v->last_error = 87; return 0; }
+    } else count = (size_t)input_count;
+    if (count > limit / source_width) { v->last_error = 87; return 0; }
+    size_t input_bytes = count * source_width, output_bytes = (size_t)capacity * dest_width;
+    uint8_t *source = memory(v, a[2], input_bytes), *destination = NULL;
+    if (capacity) {
+        if (a[2] < a[4] + output_bytes && a[4] < a[2] + input_bytes) { v->last_error = 87; return 0; }
+        destination = memory(v, a[4], output_bytes);
+    }
+    if (v->failed) return 0;
+    size_t required = 0;
+    uint32_t error = to_wide ? lw_utf8_to_utf16(source, count, destination, (size_t)capacity, flags != 0, &required)
+                             : lw_utf16_to_utf8(source, count, destination, (size_t)capacity, flags != 0, &required);
+    if (error) { v->last_error = error; return 0; }
+    return required;
+}
 static uint64_t dispatch(vm *v, int id, uint64_t *a)
 {
     switch (id) {
@@ -438,6 +476,18 @@ static uint64_t dispatch(vm *v, int id, uint64_t *a)
         v->last_error = 6; return 0;
     case GET_LAST_ERROR: return v->last_error;
     case SET_LAST_ERROR: v->last_error = (uint32_t)a[0]; return 0;
+    case GET_ACP: return LW_ANSI_CODE_PAGE;
+    case GET_CP_INFO: case GET_CP_INFO_EX: {
+        bool extended = id == GET_CP_INFO_EX;
+        uint32_t cp = (uint32_t)a[0]; uint64_t address = a[extended ? 2 : 1];
+        if ((cp && cp != LW_ANSI_CODE_PAGE) || !address) { v->last_error = 87; return 0; }
+        if (extended && (uint32_t)a[1]) { v->last_error = 1004; return 0; }
+        uint8_t *out = memory(v, address, extended ? 544 : 20);
+        if (!out) return 0;
+        lw_utf8_cpinfo(out, extended); return 1;
+    }
+    case MULTIBYTE_TO_WIDE: return convert_string(v, a, true);
+    case WIDE_TO_MULTIBYTE: return convert_string(v, a, false);
     case GET_TICK_COUNT64: {
         struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
         return (uint64_t)now.tv_sec * 1000 + (uint64_t)now.tv_nsec / 1000000;
@@ -642,5 +692,5 @@ void lw_capabilities(FILE *out)
         if (i) fputc(',', out);
         fprintf(out, "{\"dll\":\"%s\",\"name\":\"%s\",\"arguments\":%u}", apis[i].user ? "USER32.dll" : "KERNEL32.dll", apis[i].name, apis[i].argc);
     }
-    fputs("]}\n", out);
+    fprintf(out, "],\"ansi_code_page\":%u}\n", LW_ANSI_CODE_PAGE);
 }

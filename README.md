@@ -4,7 +4,7 @@
 MIT 许可。执行核心使用 C11，窗口后端使用 Objective-C/AppKit，编译工具为系统 Clang 和 Make。
 
 当前原型已经执行专门构建的 32 位、64 位 Windows PE 示例，完成控制台输出和文件读写。
-项目包含独立实现的 PE 解析与加载、x86 指令解释器、Windows 调用约定和 15 个接口入口。
+项目包含独立实现的 PE 解析与加载、x86 指令解释器、Windows 调用约定和 20 个接口入口。
 Wine、CrossOver、Rosetta、Windows 虚拟机均不属于当前执行链。
 
 **这是很小的接口子集验证版。当前不能运行 DeepSeekQQ 安装器，也不能运行一般的 Python、Qt、Electron、.NET 桌面软件。**
@@ -74,11 +74,30 @@ TLS 模板、索引地址和回调表必须在客体映像内，回调目标必�
 `GetLastError`, `SetLastError`, `GetTickCount64`, `GetCurrentProcessId`, `GetFileSizeEx`,
 `GetModuleHandleW`, `LoadLibraryW`, `GetProcAddress`。
 
+字符编码接口：`GetACP`, `GetCPInfo`, `GetCPInfoExW`, `MultiByteToWideChar`, `WideCharToMultiByte`。
+
 `USER32.dll`：`MessageBoxW`。
 
 其中 `GetStdHandle` 仅提供标准输出、标准错误；`CloseHandle` 目前仅关闭普通文件句柄。
 `CreateFileW` 仅支持普通文件、读/写通用访问、零共享、空安全属性/模板和普通文件属性。
 未实现的导入、指令和受限参数均应按当前实现返回明确错误，不伪造完整兼容性。
+
+### 字符编码配置
+
+当前客体采用固定的 UTF-8 ANSI 配置，`GetACP()` 返回 65001；它不是 macOS 的系统码页查询。
+`CP_ACP`（0）和 `CP_UTF8`（65001）使用相同的 UTF-8 / UTF-16LE 转换，支持长度查询、
+显式长度、`-1` 结尾零字符、代理对、非法序列替换或严格报错，以及输出缓冲区不足的错误。
+`MultiByteToWideChar` 支持标志 0 / `MB_ERR_INVALID_CHARS`，`WideCharToMultiByte` 支持
+0 / `WC_ERR_INVALID_CHARS`；UTF-8 不接受默认字符参数。单次输入或输出缓冲区限制为 16 MiB。
+GBK/936、1252 等其他码页与额外标志暂不支持，返回明确错误。完整 NLS、区域设置及旧码页兼容仍需后续实现。
+
+可一次列出全部缺失导入，而不是逐个遇到第一个错误：
+
+```sh
+python3 tools/compatibility.py /path/to/program.exe --output import-report.json
+```
+
+存在缺失导入时返回 1，没有缺失时返回 0。该命令不执行 EXE，也不把入口名称齐全视为程序兼容。
 
 ## 精简与效率
 
@@ -98,7 +117,7 @@ DeepSeekQQ 的实际导入分析与阻断原因见 [reports/deepseekqq.json](rep
 
 ## 本机验证记录
 
-2026-10-25，在 Apple Silicon macOS 上：35 项测试在普通版和 AddressSanitizer /
+2026-10-25，在 Apple Silicon macOS 上：48 项测试在普通版和 AddressSanitizer /
 UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子的变异 PE 分析输入、
 120 个变异 TLS 执行输入，以及 4 个实际执行示例。
 可用 `python3 tools/sanitize.py` 重新构建并运行这些检查；结果写入
@@ -107,11 +126,12 @@ UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子
 当前核心可执行文件约 52 KiB；可选窗口模块约 50 KiB，精确字节数见测量报告。
 控制台小示例在本次 20 次新进程测量中的启动加执行中位数约 2.2 ms，进程峰值常驻内存中位数约 1.3 MiB。
 这些数字仅对应仓库内的微型示例和本机环境，不能外推到一般 Windows 应用。
-DeepSeekQQ 安装器分析到 153 个静态导入项，其中 140 项入口名称尚未实现；本次执行首先停在
-`kernel32.dll!GetACP` 的导入绑定。绑定成功之前不会执行 TLS 回调，因此尚未验证该安装器的实际 TLS。
+DeepSeekQQ 安装器分析到 153 个静态导入项，其中 135 项入口名称尚未实现；本次执行首先停在
+`kernel32.dll!GetExitCodeProcess` 的导入绑定。绑定成功之前不会执行 TLS 回调，因此尚未验证该安装器的实际 TLS。
+完整缺失清单见 [reports/deepseekqq-imports.json](reports/deepseekqq-imports.json)。
 静态导入项数量不等于完整依赖数量，也不是兼容性百分比。
 
-同一组控制台、文件和 TLS 示例可在 LeanWin 与真实 Windows 上运行并检查结果：
+同一组控制台、文件、TLS 和 UTF-8 编码示例可在 LeanWin 与真实 Windows 上运行并检查结果：
 
 ```sh
 # macOS / Linux
@@ -121,7 +141,7 @@ python3 tools/smoke.py --runner ./build/leanwin --output reports/smoke.json
 python tools/smoke.py --output reports/windows-native.json
 ```
 
-GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 6 项原生执行检查。
+GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 8 项原生执行检查。
 2026-10-25 的[首次跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40173962767)全部通过，
 结果记录在 [reports/ci.json](reports/ci.json)。本机 `validation.json` 仅记录本机检查，Windows 结果由独立 CI 任务提供。
 每次运行的真实结果与报告以仓库的 [Actions](https://github.com/MoFanMon/LeanWin/actions) 为准。
@@ -153,6 +173,8 @@ Windows 接口 → POSIX 文件/进程接口
 - [Microsoft PE/COFF 格式](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format)
 - [Windows x64 调用约定](https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention)
 - [CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
+- [MultiByteToWideChar](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-multibytetowidechar)
+- [WideCharToMultiByte](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte)
 - [Wine 的加载器与接口实现概述](https://github.com/wine-mirror/wine/blob/master/README.md)
 - [CodeWeavers 开源组件说明](https://www.codeweavers.com/crossover/source)
 

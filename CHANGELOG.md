@@ -2,6 +2,15 @@
 
 ## 2026-10-25
 
+### 字符编码与导入诊断
+
+- 增加 `GetACP`、`GetCPInfo`、`GetCPInfoExW`、`MultiByteToWideChar`、`WideCharToMultiByte` 的 UTF-8 配置实现。
+- 字符转换支持 UTF-16 代理对、长度查询、严格/替换模式、参数与缓冲区检查；其他码页暂不支持。
+- 新增完整静态导入诊断工具和 13 项回归测试，测试总数为 48。
+- Windows 原生对照示例扩展为 8 项；当前 DeepSeekQQ 的下一处错误是 `GetExitCodeProcess`，仍有 135 项静态导入未实现。
+
+### TLS 与测试基础设施
+
 - 支持单个 EXE 主线程的静态 TLS：复制模板、零填充、写入模块索引，提供最小 FS/GS 槽表访问。
 - 按顺序调用 `DLL_PROCESS_ATTACH` 回调，处理 x86 stdcall / Windows x64 参数和栈空间。
 - 为 TLS 地址、数据大小、区段和回调数量增加边界检查；回调与入口共用指令预算。

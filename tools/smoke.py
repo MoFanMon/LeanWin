@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "examples"))
 sys.path.insert(0, str(ROOT / "tests"))
 from build import console, files
 from test_tls import TLSProgram
+from test_nls import nls_probe, NLS_PROBE_EXPECTED
 
 
 def tls_probe(bits):
@@ -62,7 +63,8 @@ def main():
         for bits in (32, 64):
             cases = [("console", console(bits), 37, b"Hello from a Windows EXE on macOS!\r\n"),
                      ("files", files(bits=bits), 0, b"LeanWin file round trip.\n"),
-                     ("tls", tls_probe(bits), 0, b"")]
+                     ("tls", tls_probe(bits), 0, b""),
+                     ("nls", nls_probe(bits), 0, NLS_PROBE_EXPECTED)]
             for name, program, expected_exit, expected_stdout in cases:
                 folder = Path(directory) / f"{name}{bits}"
                 folder.mkdir()

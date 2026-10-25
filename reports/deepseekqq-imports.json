@@ -1,0 +1,780 @@
+{
+  "file": "DeepSeekQQ-Setup.exe",
+  "sha256": "a042a1878d94b5359df91acf1d3866ae601a64ce6f22ec9d0379721ba3836847",
+  "format": "PE32",
+  "architecture": "x86",
+  "static_import_entries": 153,
+  "supported_import_entries": 18,
+  "missing_import_entries": 135,
+  "supported_imports": [
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetACP",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "CloseHandle",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "ExitProcess",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetCPInfoExW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetCPInfo",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetStdHandle",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetModuleHandleW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "ReadFile",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetLastError",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SetLastError",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetFileSizeEx",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetProcAddress",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "WideCharToMultiByte",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "MultiByteToWideChar",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "LoadLibraryW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "CreateFileW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "WriteFile",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "MessageBoxW",
+      "delayed": false
+    }
+  ],
+  "missing_imports": [
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetExitCodeProcess",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "LocalFree",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SizeofResource",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "VirtualProtect",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "QueryPerformanceFrequency",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "VirtualFree",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetFullPathNameW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetProcessHeap",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "HeapAlloc",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "CompareStringOrdinal",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "RtlUnwind",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SetFilePointerEx",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "FreeLibrary",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "HeapDestroy",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "CreateProcessW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetModuleFileNameW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "FindResourceW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "CreateThread",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "CompareStringW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "LoadLibraryA",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "ResetEvent",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetVolumeInformationW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetVersion",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetDriveTypeW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "RaiseException",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "FormatMessageW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SwitchToThread",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetExitCodeThread",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetCurrentThread",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "LoadLibraryExW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "LockResource",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetCurrentThreadId",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "UnhandledExceptionFilter",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "VirtualQuery",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "VirtualQueryEx",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "Sleep",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "EnterCriticalSection",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "LoadResource",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SuspendThread",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetTickCount",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetStartupInfoW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetFileAttributesW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetCurrentDirectoryW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "InitializeCriticalSection",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetSystemWindowsDirectoryW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetThreadPriority",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SetThreadPriority",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetCurrentProcess",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "VirtualAlloc",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetCommandLineW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetSystemInfo",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetTempPathW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "LeaveCriticalSection",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "ResumeThread",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetVersionExW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "VerifyVersionInfoW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "HeapCreate",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "LCMapStringW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "VerSetConditionMask",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetDiskFreeSpaceW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "FindFirstFileW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetUserDefaultUILanguage",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "lstrlenW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SetEndOfFile",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "QueryPerformanceCounter",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "HeapFree",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "FindClose",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SetEvent",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetLocaleInfoW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetSystemDirectoryW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "DeleteFileW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetLocalTime",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "WaitForSingleObject",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "ExitThread",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "DeleteCriticalSection",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "TlsGetValue",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetDateFormatW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "IsValidLocale",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "TlsSetValue",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "CreateDirectoryW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetSystemDefaultUILanguage",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "EnumCalendarInfoW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "LocalAlloc",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetUserDefaultLangID",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "RemoveDirectoryW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "CreateEventW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SetThreadLocale",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetThreadLocale",
+      "delayed": false
+    },
+    {
+      "dll": "comctl32.dll",
+      "symbol": "InitCommonControls",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "CreateWindowExW",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "TranslateMessage",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "CharLowerBuffW",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "CallWindowProcW",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "CharUpperW",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "PeekMessageW",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "GetSystemMetrics",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "SetWindowLongW",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "DestroyWindow",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "CharUpperBuffW",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "CharNextW",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "MsgWaitForMultipleObjects",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "LoadStringW",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "ExitWindowsEx",
+      "delayed": false
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "DispatchMessageW",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SafeArrayPutElement",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "VariantInit",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "VariantClear",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SysFreeString",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SafeArrayAccessData",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SysReAllocStringLen",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SafeArrayCreate",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SafeArrayGetElement",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SysAllocStringLen",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SafeArrayUnaccessData",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SafeArrayPtrOfIndex",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "VariantCopy",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SafeArrayGetUBound",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "SafeArrayGetLBound",
+      "delayed": false
+    },
+    {
+      "dll": "oleaut32.dll",
+      "symbol": "VariantChangeType",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "ConvertStringSecurityDescriptorToSecurityDescriptorW",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "OpenThreadToken",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "AdjustTokenPrivileges",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "LookupPrivilegeValueW",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "RegOpenKeyExW",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "OpenProcessToken",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "FreeSid",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "AllocateAndInitializeSid",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "EqualSid",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "RegQueryValueExW",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "GetTokenInformation",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "ConvertSidToStringSidW",
+      "delayed": false
+    },
+    {
+      "dll": "advapi32.dll",
+      "symbol": "RegCloseKey",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetLogicalProcessorInformation",
+      "delayed": true
+    },
+    {
+      "dll": "user32.dll",
+      "symbol": "MessageBoxA",
+      "delayed": true
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetNativeSystemInfo",
+      "delayed": true
+    }
+  ],
+  "execution_validated": false,
+  "note": "Static entrypoint-name analysis only; parameter, instruction, loader and application compatibility are not established."
+}

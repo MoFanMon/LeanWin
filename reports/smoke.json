@@ -17,6 +17,11 @@
       "exit_code": 0
     },
     {
+      "name": "nls32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
       "name": "console64",
       "status": "PASS",
       "exit_code": 37
@@ -28,6 +33,11 @@
     },
     {
       "name": "tls64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "nls64",
       "status": "PASS",
       "exit_code": 0
     }

@@ -30,7 +30,7 @@ def main():
         binary = folder / "leanwin-asan"
         subprocess.run([os.environ.get("CC", "cc"), "-D_POSIX_C_SOURCE=200809L", "-D_DARWIN_C_SOURCE",
                         "-std=c11", "-O1", "-g", "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
-                        str(ROOT / "src/main.c"), str(ROOT / "src/pe.c"), str(ROOT / "src/vm.c"),
+                        *[str(p) for p in sorted((ROOT / "src").glob("*.c"))],
                         "-o", str(binary)], check=True)
         env = dict(os.environ, LEANWIN_CLI=str(binary),
                    ASAN_OPTIONS=f"detect_leaks=0:halt_on_error=1:log_path={folder}/sanitizer",
