@@ -22,6 +22,51 @@
       "exit_code": 0
     },
     {
+      "name": "heap32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "virtual32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "resources32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "named-resources32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "thread32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "event32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "thread-tls32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "process32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "context32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
       "name": "console64",
       "status": "PASS",
       "exit_code": 37
@@ -38,6 +83,51 @@
     },
     {
       "name": "nls64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "heap64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "virtual64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "resources64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "named-resources64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "thread64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "event64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "thread-tls64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "process64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "context64",
       "status": "PASS",
       "exit_code": 0
     }

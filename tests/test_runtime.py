@@ -51,12 +51,12 @@ class ExecutionTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 79, result.stderr)
 
     def test_unimplemented_import_fails_before_guest_execution(self):
-        p = Program([("KERNEL32.dll", "CreateThread")])
+        p = Program([("KERNEL32.dll", "LeanWinMissingFunction")])
         p.emit(b"\xeb\xfe")
         with tempfile.TemporaryDirectory() as directory:
             result = self.run_program(p, Path(directory) / "drive_c")
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn(b"KERNEL32.dll!CreateThread", result.stderr)
+            self.assertIn(b"KERNEL32.dll!LeanWinMissingFunction", result.stderr)
 
     def test_instruction_budget_stops_an_infinite_guest_loop(self):
         p = Program([])

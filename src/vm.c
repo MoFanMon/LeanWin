@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: MIT. Original, deliberately limited x86 interpreter. */
 #include "vm.h"
 #include "nls.h"
+#include "memory.h"
+#include "resource.h"
+#include "process.h"
 #include <ctype.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -21,19 +24,60 @@
 #define STACK_SIZE (1024U * 1024U)
 #define STACK_BASE UINT64_C(0x70000000)
 #define API_BASE UINT64_C(0xf0000000)
+#define TRAP_BASE UINT64_C(0xe0000000)
 #define RETURN_ADDRESS UINT64_C(0xfffffff0)
 #define TLS_BASE UINT64_C(0x71000000)
 #define TLS_FIXED_SIZE 8192U
 #define TLS_MAX_SIZE (1024U * 1024U)
 #define TLS_MAX_CALLBACKS 64U
+#define MAX_THREADS 16U
+#define TLS_STRIDE UINT64_C(0x200000)
+#define PARAMETERS_BASE UINT64_C(0x75000000)
+#define PARAMETERS_SIZE 65536U
 #define CF 1U
 #define PF 4U
+#define AF 16U
 #define ZF 64U
 #define SF 128U
+#define DF 1024U
 #define OF 2048U
+#define ID_FLAG 0x200000U
+#define ARITHMETIC_FLAGS (CF | PF | AF | ZF | SF | OF)
+
+enum { THREAD_ATTACH, THREAD_BODY, THREAD_DETACH, THREAD_ENDED };
+enum { READY, WAIT_OBJECT, SLEEPING, WAIT_CRITICAL };
+typedef struct {
+    uint64_t r[16], ip, start, parameter, deadline, wait_handle;
+    unsigned flags, last_error, id, suspend, phase, callback, state;
+    uint32_t exit_code;
+    uint8_t *stack, *tls;
+    bool open, entered;
+} guest_thread;
+typedef struct { bool used, manual, signaled; } guest_event;
+typedef struct { uint64_t address; unsigned owner, recursion; bool used; } guest_critical;
 
 typedef struct {
     const lw_pe *pe;
+    const lw_run_options *options;
+    lw_import *traps;
+    unsigned trap_count, trap_capacity;
+    lw_memory *memory;
+    lw_processes *processes;
+    uint8_t *parameters;
+    uint64_t command_line, module_path;
+    size_t module_length;
+    char module_utf8[4096];
+    guest_thread threads[MAX_THREADS];
+    guest_event events[64];
+    guest_critical critical[64];
+    unsigned thread_count, current;
+    bool tls_indices[64], yielded, thread_exit;
+    uint32_t thread_exit_code;
+    uint64_t tls_template;
+    size_t tls_initialized;
+    lw_resource resources[64];
+    unsigned resource_count;
+    bool resource_loaded[64];
     uint8_t *image, *stack, *tls;
     size_t tls_size;
     uint64_t tls_callbacks[TLS_MAX_CALLBACKS], segment;
@@ -50,7 +94,17 @@ typedef struct { const char *name; unsigned argc; bool user; } api;
 enum { EXIT_PROCESS, GET_STD_HANDLE, WRITE_FILE, READ_FILE, CREATE_FILE, CLOSE_HANDLE,
        GET_LAST_ERROR, SET_LAST_ERROR, GET_TICK_COUNT64, GET_PROCESS_ID, GET_FILE_SIZE,
        GET_MODULE_HANDLE, LOAD_LIBRARY, GET_PROC_ADDRESS, MESSAGE_BOX,
-       GET_ACP, GET_CP_INFO, GET_CP_INFO_EX, MULTIBYTE_TO_WIDE, WIDE_TO_MULTIBYTE, API_COUNT };
+       GET_ACP, GET_CP_INFO, GET_CP_INFO_EX, MULTIBYTE_TO_WIDE, WIDE_TO_MULTIBYTE,
+       GET_HEAP, HEAP_CREATE, HEAP_DESTROY, HEAP_ALLOC, HEAP_FREE, LOCAL_ALLOC, LOCAL_FREE,
+       VIRTUAL_ALLOC, VIRTUAL_FREE, VIRTUAL_PROTECT, VIRTUAL_QUERY, VIRTUAL_QUERY_EX,
+       FIND_RESOURCE, SIZEOF_RESOURCE, LOAD_RESOURCE, LOCK_RESOURCE,
+       CURRENT_PROCESS, EXIT_CODE_PROCESS, CURRENT_THREAD, CURRENT_THREAD_ID, CREATE_THREAD,
+       EXIT_THREAD, EXIT_CODE_THREAD, RESUME_THREAD, SUSPEND_THREAD, WAIT_SINGLE,
+       CREATE_EVENT, SET_EVENT, RESET_EVENT, SLEEP_THREAD, SWITCH_THREAD,
+       TLS_ALLOC, TLS_FREE, TLS_GET, TLS_SET,
+       CRITICAL_INIT, CRITICAL_ENTER, CRITICAL_LEAVE, CRITICAL_DELETE,
+       CREATE_PROCESS, GET_COMMAND_LINE, GET_MODULE_FILENAME, GET_STARTUP_INFO,
+       PERFORMANCE_FREQUENCY, PERFORMANCE_COUNTER, API_COUNT };
 static const api apis[] = {
     {"ExitProcess",1,false}, {"GetStdHandle",1,false}, {"WriteFile",5,false},
     {"ReadFile",5,false}, {"CreateFileW",7,false}, {"CloseHandle",1,false},
@@ -59,8 +113,38 @@ static const api apis[] = {
     {"GetModuleHandleW",1,false}, {"LoadLibraryW",1,false},
     {"GetProcAddress",2,false}, {"MessageBoxW",4,true},
     {"GetACP",0,false}, {"GetCPInfo",2,false}, {"GetCPInfoExW",3,false},
-    {"MultiByteToWideChar",6,false}, {"WideCharToMultiByte",8,false}
+    {"MultiByteToWideChar",6,false}, {"WideCharToMultiByte",8,false},
+    {"GetProcessHeap",0,false}, {"HeapCreate",3,false}, {"HeapDestroy",1,false},
+    {"HeapAlloc",3,false}, {"HeapFree",3,false}, {"LocalAlloc",2,false}, {"LocalFree",1,false},
+    {"VirtualAlloc",4,false}, {"VirtualFree",3,false}, {"VirtualProtect",4,false},
+    {"VirtualQuery",3,false}, {"VirtualQueryEx",4,false}, {"FindResourceW",3,false},
+    {"SizeofResource",2,false}, {"LoadResource",2,false}, {"LockResource",1,false},
+    {"GetCurrentProcess",0,false}, {"GetExitCodeProcess",2,false}, {"GetCurrentThread",0,false},
+    {"GetCurrentThreadId",0,false}, {"CreateThread",6,false}, {"ExitThread",1,false},
+    {"GetExitCodeThread",2,false}, {"ResumeThread",1,false}, {"SuspendThread",1,false},
+    {"WaitForSingleObject",2,false}, {"CreateEventW",4,false}, {"SetEvent",1,false},
+    {"ResetEvent",1,false}, {"Sleep",1,false}, {"SwitchToThread",0,false},
+    {"TlsAlloc",0,false}, {"TlsFree",1,false}, {"TlsGetValue",1,false}, {"TlsSetValue",2,false},
+    {"InitializeCriticalSection",1,false}, {"EnterCriticalSection",1,false},
+    {"LeaveCriticalSection",1,false}, {"DeleteCriticalSection",1,false},
+    {"CreateProcessW",10,false}, {"GetCommandLineW",0,false}, {"GetModuleFileNameW",3,false},
+    {"GetStartupInfoW",1,false}, {"QueryPerformanceFrequency",1,false}, {"QueryPerformanceCounter",1,false}
 };
+static uint64_t create_thread(vm *, uint64_t *);
+static bool executable_address(vm *, uint64_t);
+static uint64_t pointer(vm *, uint64_t);
+static uint64_t now_ms(void)
+{
+    struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec*1000 + (uint64_t)now.tv_nsec/1000000;
+}
+static uint64_t thread_tls_base(vm *v) { return TLS_BASE + v->current*TLS_STRIDE; }
+static guest_thread *thread_handle(vm *v, uint64_t handle)
+{
+    if (handle == pointer(v, (uint64_t)-2)) return &v->threads[v->current];
+    if (handle >= 0x2000 && handle-0x2000 < v->thread_count && v->threads[handle-0x2000].open) return &v->threads[handle-0x2000];
+    return NULL;
+}
 
 static void fault(vm *v, const char *format, ...)
 {
@@ -72,20 +156,17 @@ static void fault(vm *v, const char *format, ...)
 }
 static uint64_t mask(unsigned bits) { return bits == 64 ? UINT64_MAX : (UINT64_C(1) << bits) - 1; }
 static uint64_t pointer(vm *v, uint64_t value) { return value & mask(v->pe->bits); }
-static uint8_t *memory(vm *v, uint64_t address, size_t size)
+static uint8_t *access_memory(vm *v, uint64_t address, size_t size, unsigned access)
 {
-    if (address >= v->pe->image_base && address - v->pe->image_base <= v->pe->image_size &&
-        size <= v->pe->image_size - (address - v->pe->image_base)) return v->image + (address - v->pe->image_base);
-    if (address >= STACK_BASE && address - STACK_BASE <= STACK_SIZE && size <= STACK_SIZE - (address - STACK_BASE))
-        return v->stack + (address - STACK_BASE);
-    if (v->tls && address >= TLS_BASE && address - TLS_BASE <= v->tls_size && size <= v->tls_size - (address - TLS_BASE))
-        return v->tls + (address - TLS_BASE);
-    fault(v, "unmapped guest address 0x%" PRIx64 " (%zu bytes), IP=0x%" PRIx64, address, size, v->origin);
+    uint8_t *p = lw_memory_access(v->memory, address, size, access);
+    if (p) return p;
+    fault(v, "unmapped guest address or protection violation at 0x%" PRIx64 " (%zu bytes), IP=0x%" PRIx64, address, size, v->origin);
     return NULL;
 }
+static uint8_t *memory(vm *v, uint64_t address, size_t size) { return access_memory(v, address, size, LW_READ | LW_WRITE); }
 static uint64_t read_mem(vm *v, uint64_t address, unsigned size)
 {
-    uint8_t *p = memory(v, address, size); uint64_t value = 0;
+    uint8_t *p = access_memory(v, address, size, LW_READ); uint64_t value = 0;
     if (p) for (unsigned i = 0; i < size; i++) value |= (uint64_t)p[i] << (i * 8);
     return value;
 }
@@ -94,7 +175,12 @@ static void write_mem(vm *v, uint64_t address, uint64_t value, unsigned size)
     uint8_t *p = memory(v, address, size);
     if (p) for (unsigned i = 0; i < size; i++) p[i] = (uint8_t)(value >> (i * 8));
 }
-static uint64_t fetch(vm *v, unsigned n) { uint64_t value = read_mem(v, v->ip, n); v->ip = pointer(v, v->ip + n); return value; }
+static uint64_t fetch(vm *v, unsigned n)
+{
+    uint8_t *p = access_memory(v, v->ip, n, LW_EXECUTE); uint64_t value = 0;
+    if (p) for (unsigned i = 0; i < n; i++) value |= (uint64_t)p[i] << (i * 8);
+    v->ip = pointer(v, v->ip + n); return value;
+}
 static void push(vm *v, uint64_t value) { v->r[4] = pointer(v, v->r[4] - v->word); write_mem(v, v->r[4], value, v->word); }
 static uint64_t pop(vm *v) { uint64_t value = read_mem(v, v->r[4], v->word); v->r[4] = pointer(v, v->r[4] + v->word); return value; }
 static uint64_t get_reg(vm *v, unsigned r, unsigned bits) { return v->r[r] & mask(bits); }
@@ -136,15 +222,17 @@ static uint64_t alu(vm *v, uint64_t a, uint64_t b, unsigned bits, unsigned kind)
     switch (kind) { case 0: result = a + b; break; case 1: result = a | b; break;
         case 4: result = a & b; break; case 5: case 7: result = a - b; break;
         case 6: result = a ^ b; break; default: fault(v, "unsupported arithmetic operation"); return 0; }
-    result &= m; v->flags = 0;
+    result &= m; v->flags &= ~ARITHMETIC_FLAGS;
     if (!result) v->flags |= ZF;
     if (result & sign) v->flags |= SF;
     unsigned parity = (unsigned)result & 255; parity ^= parity >> 4; parity &= 15;
     if ((0x9669U >> parity) & 1) v->flags |= PF;
     if (kind == 0) {
+        if ((a ^ b ^ result) & 16) v->flags |= AF;
         if (result < a) v->flags |= CF;
         if ((~(a ^ b) & (a ^ result)) & sign) v->flags |= OF;
     } else if (kind == 5 || kind == 7) {
+        if ((a ^ b ^ result) & 16) v->flags |= AF;
         if (a < b) v->flags |= CF;
         if (((a ^ b) & (a ^ result)) & sign) v->flags |= OF;
     }
@@ -161,24 +249,45 @@ static bool condition(vm *v, unsigned code)
         case 6: result = s != o; break; default: result = z || (s != o); break; }
     return result != ((code & 1) != 0);
 }
+static uint64_t multiply(vm *v, uint64_t a, uint64_t b, unsigned bits)
+{
+    uint64_t sign = UINT64_C(1) << (bits-1), m = mask(bits);
+    a &= m; b &= m;
+    bool negative = ((a ^ b) & sign) != 0;
+    uint64_t left = (a & sign) ? (0-a)&m : a, right = (b & sign) ? (0-b)&m : b;
+    uint64_t limit = negative ? sign : sign-1;
+    v->flags &= ~(CF | OF);
+    if (right && left > limit/right) v->flags |= CF | OF;
+    return (a*b)&m;
+}
 
 static void instruction(vm *v)
 {
     v->origin = v->ip;
     v->segment = 0;
     unsigned rex = 0, bits = 32, byte = (unsigned)fetch(v, 1), prefixes = 0;
-    bool wide16 = false;
-    while (byte == 0x66 || byte == 0x64 || byte == 0x65 || (v->word == 8 && byte >= 0x40 && byte <= 0x4f)) {
+    bool wide16 = false, repeat = false;
+    while (byte == 0x66 || byte == 0xf3 || byte == 0x64 || byte == 0x65 || (v->word == 8 && byte >= 0x40 && byte <= 0x4f)) {
         if (++prefixes > 8) { fault(v, "too many instruction prefixes"); return; }
         if (byte == 0x66) wide16 = true;
+        else if (byte == 0xf3) repeat = true;
         else if (byte == 0x64 || byte == 0x65) {
             if ((byte == 0x64) != (v->word == 4)) { fault(v, "unsupported FS/GS segment for this architecture"); return; }
-            v->segment = TLS_BASE;
+            v->segment = thread_tls_base(v);
         } else rex = byte & 15;
         byte = (unsigned)fetch(v, 1);
     }
     bits = (rex & 8) ? 64 : wide16 ? 16 : 32;
     if (v->failed) return;
+    if (repeat && byte != 0xa4 && byte != 0xa5 && byte != 0xaa && byte != 0xab) { fault(v, "unsupported REP instruction at guest IP 0x%" PRIx64, v->origin); return; }
+    if (byte < 0x40 && ((byte & 7) == 4 || (byte & 7) == 5)) {
+        unsigned width = (byte & 1) ? bits : 8, kind = (byte >> 3) & 7;
+        uint64_t value = fetch(v, width == 64 ? 4 : width/8);
+        if (width == 64) value = (uint64_t)(int64_t)(int32_t)value;
+        uint64_t result = alu(v, get_reg(v, 0, width), value, width, kind);
+        if (kind != 7) set_reg(v, 0, result, width);
+        return;
+    }
     if (byte >= 0xb8 && byte <= 0xbf) {
         uint64_t value = fetch(v, bits / 8); set_reg(v, (byte & 7) + ((rex & 1) ? 8 : 0), value, bits); return;
     }
@@ -192,9 +301,36 @@ static void instruction(vm *v)
     }
     switch (byte) {
     case 0x90: return;
-    case 0xa1: {
+    case 0xfc: v->flags &= ~DF; return;
+    case 0x9c: case 0x9d: {
+        unsigned width = wide16 ? 2 : v->word;
+        if (byte == 0x9c) {
+            v->r[4] = pointer(v, v->r[4]-width);
+            write_mem(v, v->r[4], v->flags | 0x202U, width);
+        } else {
+            uint64_t value = read_mem(v, v->r[4], width); v->r[4] = pointer(v, v->r[4]+width);
+            unsigned allowed = ARITHMETIC_FLAGS | DF | (wide16 ? 0U : ID_FLAG);
+            v->flags = (v->flags & ~allowed) | ((unsigned)value & allowed);
+        }
+        return;
+    }
+    case 0xa4: case 0xa5: case 0xaa: case 0xab: {
+        if (repeat && !pointer(v, v->r[1])) return;
+        bool store = byte == 0xaa || byte == 0xab;
+        unsigned width = (byte & 1) ? bits/8 : 1;
+        uint64_t value = store ? get_reg(v, 0, width*8) : read_mem(v, pointer(v, v->r[6]+v->segment), width);
+        write_mem(v, pointer(v, v->r[7]), value, width);
+        int64_t step = (v->flags & DF) ? -(int64_t)width : width;
+        if (!store) v->r[6] = pointer(v, v->r[6]+(uint64_t)step);
+        v->r[7] = pointer(v, v->r[7]+(uint64_t)step);
+        if (repeat) { v->r[1] = pointer(v, v->r[1]-1); if (v->r[1]) v->ip = v->origin; }
+        return;
+    }
+    case 0xa0: case 0xa1: case 0xa2: case 0xa3: {
         uint64_t address = pointer(v, fetch(v, v->word) + v->segment);
-        set_reg(v, 0, read_mem(v, address, bits / 8), bits);
+        unsigned width = (byte & 1) ? bits : 8;
+        if (!(byte & 2)) set_reg(v, 0, read_mem(v, address, width / 8), width);
+        else write_mem(v, address, get_reg(v, 0, width), width / 8);
         return;
     }
     case 0x68: { int64_t x = (int32_t)fetch(v, 4); push(v, (uint64_t)x); return; }
@@ -207,10 +343,26 @@ static void instruction(vm *v)
     case 0xeb: { int8_t delta = (int8_t)fetch(v, 1); v->ip = pointer(v, v->ip + delta); return; }
     case 0x0f: {
         unsigned second = (unsigned)fetch(v, 1);
+        if (second == 0xa2) {
+            uint32_t leaf = (uint32_t)v->r[0];
+            v->r[0] = v->r[1] = v->r[2] = v->r[3] = 0;
+            if (!leaf) { v->r[0] = 1; v->r[3] = 0x6e61654c; v->r[2] = 0x436e6957; v->r[1] = 0x20205550; }
+            else if (leaf == 1) v->r[0] = 0x300; /* Integer interpreter: no x87/SIMD advertised. */
+            return;
+        }
+        if (second == 0xaf) {
+            unsigned reg; operand op = modrm(v, rex, &reg);
+            set_reg(v, reg, multiply(v, get_reg(v, reg, bits), get_operand(v, op, bits), bits), bits); return;
+        }
         if (second >= 0x80 && second <= 0x8f) {
             int32_t delta = (int32_t)fetch(v, 4);
             if (condition(v, second & 15)) v->ip = pointer(v, v->ip + delta);
             return;
+        }
+        if (second >= 0x90 && second <= 0x9f) {
+            unsigned ignored; operand op = modrm(v, rex, &ignored);
+            if (op.reg && op.index >= 4 && !rex) { fault(v, "legacy high-byte registers are not implemented"); return; }
+            set_operand(v, op, condition(v, second & 15), 8); return;
         }
         if (second == 0xb6 || second == 0xb7 || second == 0xbe || second == 0xbf) {
             unsigned reg, width = (second & 1) ? 16 : 8; operand op = modrm(v, rex, &reg);
@@ -221,12 +373,49 @@ static void instruction(vm *v)
         }
         break;
     }
+    case 0x69: case 0x6b: case 0xc1: case 0xd1: case 0xd3:
+    case 0x88: case 0x8a: case 0x84:
     case 0x89: case 0x8b: case 0x8d: case 0xc7: case 0xc6: case 0x63:
     case 0x01: case 0x03: case 0x09: case 0x0b: case 0x21: case 0x23:
     case 0x29: case 0x2b: case 0x31: case 0x33: case 0x39: case 0x3b: case 0x85:
-    case 0x81: case 0x83: case 0xff: {
+    case 0x80: case 0x81: case 0x83: case 0xf6: case 0xf7: case 0xff: {
         unsigned reg; operand op = modrm(v, rex, &reg);
         if (v->failed) return;
+        if (byte == 0x69 || byte == 0x6b) {
+            uint64_t factor = byte == 0x6b ? (uint64_t)(int64_t)(int8_t)fetch(v, 1) : fetch(v, bits == 16 ? 2 : 4);
+            if (bits == 64 && byte == 0x69) factor = (uint64_t)(int64_t)(int32_t)factor;
+            set_reg(v, reg, multiply(v, get_operand(v, op, bits), factor, bits), bits); return;
+        }
+        if (byte == 0xc1 || byte == 0xd1 || byte == 0xd3) {
+            unsigned operation = reg & 7;
+            unsigned count = byte == 0xc1 ? (unsigned)fetch(v, 1) : byte == 0xd1 ? 1U : (unsigned)v->r[1];
+            count &= bits == 64 ? 63 : 31;
+            if (operation != 4 && operation != 5 && operation != 7) break;
+            if (!count) return;
+            uint64_t value = get_operand(v, op, bits), result;
+            unsigned carry = 0;
+            if (operation == 4) {
+                if (count <= bits) carry = (unsigned)((value >> (bits-count)) & 1);
+                result = count >= bits ? 0 : (value << count) & mask(bits);
+            } else {
+                if (count <= bits) carry = (unsigned)((value >> (count-1)) & 1);
+                result = count >= bits ? 0 : value >> count;
+                if (operation == 7 && (value & (UINT64_C(1) << (bits-1))))
+                    result |= count >= bits ? mask(bits) : mask(bits) ^ (mask(bits) >> count);
+            }
+            (void)alu(v, result, 0, bits, 1);
+            if (carry) v->flags |= CF;
+            if (count == 1 && ((operation == 4 && ((result >> (bits-1)) ^ carry)) ||
+                              (operation == 5 && (value >> (bits-1))))) v->flags |= OF;
+            set_operand(v, op, result, bits); return;
+        }
+        if (byte == 0x88 || byte == 0x8a || byte == 0x84) {
+            if (!rex && (reg >= 4 || (op.reg && op.index >= 4))) { fault(v, "legacy high-byte registers are not implemented"); return; }
+            if (byte == 0x88) set_operand(v, op, get_reg(v, reg, 8), 8);
+            else if (byte == 0x8a) set_reg(v, reg, get_operand(v, op, 8), 8);
+            else (void)alu(v, get_operand(v, op, 8), get_reg(v, reg, 8), 8, 4);
+            return;
+        }
         if (byte == 0x8d) {
             if (op.reg) { fault(v, "LEA requires memory addressing"); return; }
             set_reg(v, reg, effective(v, op), bits); return;
@@ -258,8 +447,23 @@ static void instruction(vm *v)
             }
             break;
         }
-        if (byte == 0x81 || byte == 0x83) {
-            uint64_t b = byte == 0x83 ? (uint64_t)(int64_t)(int8_t)fetch(v, 1) : fetch(v, bits == 16 ? 2 : 4);
+        if (byte == 0xf6 || byte == 0xf7) {
+            if ((reg & 7) != 0) break;
+            if (byte == 0xf6) {
+                bits = 8;
+                if (op.reg && op.index >= 4 && !rex) { fault(v, "legacy high-byte registers are not implemented"); return; }
+            }
+            uint64_t value = fetch(v, bits == 8 ? 1 : bits == 16 ? 2 : 4);
+            if (bits == 64) value = (uint64_t)(int64_t)(int32_t)value;
+            (void)alu(v, get_operand(v, op, bits), value, bits, 4); return;
+        }
+        if (byte == 0x80 || byte == 0x81 || byte == 0x83) {
+            if (byte == 0x80) {
+                bits = 8;
+                if (op.reg && op.index >= 4 && !rex) { fault(v, "legacy high-byte registers are not implemented"); return; }
+            }
+            uint64_t b = byte == 0x83 ? (uint64_t)(int64_t)(int8_t)fetch(v, 1) : fetch(v, bits == 8 ? 1 : bits == 16 ? 2 : 4);
+            /* Byte immediates occupy one byte, unlike the 81 group. */
             if (bits == 64 && byte == 0x81) b = (uint64_t)(int64_t)(int32_t)b;
             unsigned kind = reg & 7;
             uint64_t x = alu(v, get_operand(v, op, bits), b, bits, kind);
@@ -296,6 +500,18 @@ static int bind_import(const lw_import *item, void *opaque, char *e, size_t en)
     vm *v = opaque; int mod = module(item->dll);
     int index = mod && !item->by_ordinal ? api_index(mod, item->name) : -1;
     if (index < 0) {
+        if (v->options->defer_imports) {
+            if (v->trap_count == 1024) { snprintf(e, en, "deferred import limit exceeded"); return -1; }
+            if (v->trap_count == v->trap_capacity) {
+                unsigned capacity = v->trap_capacity ? v->trap_capacity*2 : 16;
+                lw_import *items = realloc(v->traps, capacity*sizeof(*items));
+                if (!items) { snprintf(e, en, "cannot allocate deferred imports"); return -1; }
+                v->traps = items; v->trap_capacity = capacity;
+            }
+            v->traps[v->trap_count++] = *item;
+            write_mem(v, v->pe->image_base+item->iat, TRAP_BASE+v->trap_count*16, v->word);
+            return v->failed ? -1 : 0;
+        }
         if (item->by_ordinal) snprintf(e, en, "unimplemented import %s!#%u", item->dll, item->ordinal);
         else snprintf(e, en, "unimplemented import %s!%s", item->dll, item->name);
         return -1;
@@ -330,7 +546,7 @@ static uint64_t create_file(vm *v, uint64_t *a)
 {
     char path[4096]; uint64_t invalid = mask(v->pe->bits);
     if (!wide_string(v, a[0], path, sizeof(path))) { v->last_error = 87; return invalid; }
-    if (a[2] || a[3] || a[6] || (a[5] && a[5] != 0x80)) { v->last_error = 50; return invalid; }
+    if (a[3] || a[6] || (a[5] && a[5] != 0x80)) { v->last_error = 50; return invalid; }
     char *relative = path;
     if (isalpha((unsigned char)relative[0]) && relative[1] == ':') {
         if (tolower((unsigned char)relative[0]) != 'c') { v->last_error = 15; return invalid; }
@@ -338,6 +554,17 @@ static uint64_t create_file(vm *v, uint64_t *a)
     }
     for (char *p = relative; *p; p++) if (*p == '\\') *p = '/';
     if (*relative == '/') relative++;
+    char self[4096]; snprintf(self, sizeof(self), "%s", v->module_utf8);
+    for (char *s = self; *s; s++) if (*s == '\\') *s = '/';
+    if (!strcasecmp(relative, self+3)) {
+        if (a[1] != UINT64_C(0x80000000) || a[4] != 3) { v->last_error = 5; return invalid; }
+        if (a[2] & ~1U) { v->last_error = 50; return invalid; }
+        int fd = open(v->options->image_path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+        if (fd < 0) { v->last_error = os_error(); return invalid; }
+        for (unsigned i = 0; i < 64; i++) if (v->files[i] < 0) { v->files[i] = fd; return 0x1000+i; }
+        close(fd); v->last_error = 4; return invalid;
+    }
+    if (a[2]) { v->last_error = 50; return invalid; }
     int parent = dup(v->root);
     if (parent < 0) { v->last_error = 5; return invalid; }
     char *component = relative;
@@ -374,8 +601,9 @@ static uint64_t create_file(vm *v, uint64_t *a)
     }
     /* NONBLOCK also prevents a concurrently replaced FIFO from blocking the host. */
     int fd = openat(parent, component, flags | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0600);
+    uint32_t error = fd < 0 ? os_error() : 0;
     close(parent);
-    if (fd < 0) { v->last_error = os_error(); return invalid; }
+    if (fd < 0) { v->last_error = error; return invalid; }
     struct stat st;
     if (fstat(fd, &st) || !S_ISREG(st.st_mode)) { close(fd); v->last_error = 5; return invalid; }
     for (unsigned i = 0; i < 64; i++) if (v->files[i] < 0) {
@@ -434,7 +662,7 @@ static uint64_t convert_string(vm *v, uint64_t *a, bool to_wide)
     } else count = (size_t)input_count;
     if (count > limit / source_width) { v->last_error = 87; return 0; }
     size_t input_bytes = count * source_width, output_bytes = (size_t)capacity * dest_width;
-    uint8_t *source = memory(v, a[2], input_bytes), *destination = NULL;
+    uint8_t *source = access_memory(v, a[2], input_bytes, LW_READ), *destination = NULL;
     if (capacity) {
         if (a[2] < a[4] + output_bytes && a[4] < a[2] + input_bytes) { v->last_error = 87; return 0; }
         destination = memory(v, a[4], output_bytes);
@@ -445,6 +673,43 @@ static uint64_t convert_string(vm *v, uint64_t *a, bool to_wide)
                              : lw_utf16_to_utf8(source, count, destination, (size_t)capacity, flags != 0, &required);
     if (error) { v->last_error = error; return 0; }
     return required;
+}
+static bool resource_key(vm *v, uint64_t address, uint16_t *text, lw_resource_key *key)
+{
+    if (address <= 0xffff) { *key = (lw_resource_key){.id=(uint16_t)address}; return true; }
+    for (unsigned i = 0; i < 512; i++) {
+        text[i] = (uint16_t)read_mem(v, address+i*2, 2);
+        if (v->failed) return false;
+        if (!text[i]) { *key = (lw_resource_key){.text=text,.length=i,.named=true}; return true; }
+    }
+    v->last_error = 87; return false;
+}
+static guest_critical *critical_at(vm *v, uint64_t address)
+{
+    for (unsigned i = 0; i < 64; i++) if (v->critical[i].used && v->critical[i].address == address) return &v->critical[i];
+    return NULL;
+}
+static void critical_fields(vm *v, guest_critical *c)
+{
+    unsigned waiters = 0;
+    for (unsigned i = 0; i < v->thread_count; i++) if (v->threads[i].state == WAIT_CRITICAL && v->threads[i].wait_handle == c->address) waiters++;
+    write_mem(v, c->address+v->word, c->recursion+waiters-1, 4);
+    write_mem(v, c->address+v->word+4, c->recursion, 4);
+    write_mem(v, c->address+(v->word == 8 ? 16 : 12), c->owner ? v->threads[c->owner-1].id : 0, v->word);
+}
+static int object_signaled(vm *v, uint64_t handle, bool consume, unsigned owner)
+{
+    if (handle >= 0x4000 && handle < 0x4010) return lw_process_signaled(v->processes, handle);
+    guest_thread *t = handle == pointer(v, (uint64_t)-2) ? &v->threads[owner] : thread_handle(v, handle);
+    if (t) return t->phase == THREAD_ENDED;
+    if (handle == mask(v->pe->bits)) return 0;
+    if (handle >= 0x3000 && handle < 0x3040 && v->events[handle-0x3000].used) {
+        guest_event *event = &v->events[handle-0x3000];
+        if (!event->signaled) return 0;
+        if (consume && !event->manual) event->signaled = false;
+        return 1;
+    }
+    return -1;
 }
 static uint64_t dispatch(vm *v, int id, uint64_t *a)
 {
@@ -459,7 +724,7 @@ static uint64_t dispatch(vm *v, int id, uint64_t *a)
         if (fd < 0) { v->last_error = 6; return 0; }
         if (a[4]) { v->last_error = 50; return 0; }
         if (a[2] > 16 * 1024 * 1024) { v->last_error = 87; return 0; }
-        uint8_t *buffer = memory(v, a[1], (size_t)(uint32_t)a[2]);
+        uint8_t *buffer = access_memory(v, a[1], (size_t)(uint32_t)a[2], id == WRITE_FILE ? LW_READ : LW_WRITE);
         if (a[3] && !memory(v, a[3], 4)) return 0;
         if (!buffer || v->failed) return 0;
         ssize_t n;
@@ -469,13 +734,242 @@ static uint64_t dispatch(vm *v, int id, uint64_t *a)
         return 1;
     }
     case CREATE_FILE: return create_file(v, a);
-    case CLOSE_HANDLE:
+    case CREATE_PROCESS: {
+        if (a[2] || a[3] || a[4] || (a[5] & ~UINT64_C(0x08000000)) || a[6] || a[7]) { v->last_error = 50; return 0; }
+        unsigned startup_size = v->word == 8 ? 104 : 68;
+        if (!a[8] || !a[9] || read_mem(v, a[8], 4) < startup_size) { v->last_error = 87; return 0; }
+        if (!access_memory(v, a[8], startup_size, LW_READ) || !memory(v, a[9], v->word*2+8)) return 0;
+        if (read_mem(v, a[8]+(v->word == 8 ? 60 : 44), 4)) { v->last_error = 50; return 0; }
+        char app[4096], command[16384];
+        if (a[1]) {
+            if (!wide_string(v, a[1], command, sizeof(command))) { v->last_error = 87; return 0; }
+        } else command[0] = 0;
+        if (a[0]) {
+            if (!wide_string(v, a[0], app, sizeof(app))) { v->last_error = 87; return 0; }
+        } else {
+            const char *s = command; while (*s == ' ' || *s == '\t') s++;
+            bool quoted = *s == '"'; if (quoted) s++;
+            size_t n = 0;
+            while (*s && (quoted ? *s != '"' : *s != ' ' && *s != '\t')) {
+                if (n+1 == sizeof(app)) { v->last_error = 87; return 0; }
+                app[n++] = *s++;
+            }
+            if (!n || (quoted && *s != '"')) { v->last_error = 87; return 0; }
+            app[n] = 0;
+        }
+        if (!a[1]) snprintf(command, sizeof(command), "\"%s\"", app);
+        uint32_t pid;
+        uint64_t handle = lw_process_spawn(v->processes, app, command, &pid, &v->last_error);
+        if (!handle) return 0;
+        write_mem(v, a[9], handle, v->word); write_mem(v, a[9]+v->word, handle+1, v->word);
+        write_mem(v, a[9]+v->word*2, pid, 4); write_mem(v, a[9]+v->word*2+4, pid, 4);
+        return !v->failed;
+    }
+    case GET_COMMAND_LINE: return v->command_line;
+    case GET_MODULE_FILENAME: {
+        if (a[0] && a[0] != v->pe->image_base) { v->last_error = 126; return 0; }
+        uint32_t capacity = (uint32_t)a[2];
+        if (!a[1] || !capacity) { v->last_error = 122; return 0; }
+        size_t units = v->module_length+1;
+        if (units > capacity) units = capacity;
+        uint8_t *out = memory(v, a[1], units*2);
+        const uint8_t *source = access_memory(v, v->module_path, units*2, LW_READ);
+        if (!out || !source) return 0;
+        memmove(out, source, units*2); out[units*2-2] = out[units*2-1] = 0;
+        if (capacity <= v->module_length) { v->last_error = 122; return capacity; }
+        return v->module_length;
+    }
+    case GET_STARTUP_INFO: {
+        unsigned size = v->word == 8 ? 104 : 68;
+        uint8_t *out = memory(v, a[0], size);
+        if (out) { memset(out, 0, size); write_mem(v, a[0], size, 4); }
+        return 0;
+    }
+    case PERFORMANCE_COUNTER: case PERFORMANCE_FREQUENCY: {
+        struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
+        uint64_t value = id == PERFORMANCE_FREQUENCY ? UINT64_C(1000000000) : (uint64_t)now.tv_sec*1000000000+(uint64_t)now.tv_nsec;
+        write_mem(v, a[0], value, 8); return !v->failed;
+    }
+    case CLOSE_HANDLE: {
+        if (lw_process_close(v->processes, a[0])) return 1;
+        guest_thread *t = thread_handle(v, a[0]);
+        if (t && a[0] >= 0x2000 && a[0] < 0x2000+MAX_THREADS) { t->open = false; return 1; }
+        if (a[0] >= 0x3000 && a[0] < 0x3040 && v->events[a[0]-0x3000].used) { v->events[a[0]-0x3000].used = false; return 1; }
         if (a[0] >= 0x1000 && a[0] < 0x1040 && v->files[a[0] - 0x1000] >= 0) {
             close(v->files[a[0] - 0x1000]); v->files[a[0] - 0x1000] = -1; return 1;
         }
         v->last_error = 6; return 0;
+    }
     case GET_LAST_ERROR: return v->last_error;
     case SET_LAST_ERROR: v->last_error = (uint32_t)a[0]; return 0;
+    case CURRENT_PROCESS: return mask(v->pe->bits);
+    case EXIT_CODE_PROCESS: {
+        uint32_t code = 259;
+        if (a[0] != mask(v->pe->bits) && !lw_process_exit(v->processes, a[0], false, &code)) { v->last_error = 6; return 0; }
+        write_mem(v, a[1], code, 4); return !v->failed;
+    }
+    case CURRENT_THREAD: return pointer(v, (uint64_t)-2);
+    case CURRENT_THREAD_ID: return v->threads[v->current].id;
+    case CREATE_THREAD: return create_thread(v, a);
+    case EXIT_THREAD:
+        v->thread_exit = true; v->thread_exit_code = (uint32_t)a[0]; return 0;
+    case EXIT_CODE_THREAD: {
+        guest_thread *t = thread_handle(v, a[0]);
+        uint32_t code;
+        if (t) code = t->phase == THREAD_ENDED ? t->exit_code : 259;
+        else if (!lw_process_exit(v->processes, a[0], true, &code)) { v->last_error = 6; return 0; }
+        write_mem(v, a[1], code, 4); return !v->failed;
+    }
+    case RESUME_THREAD: case SUSPEND_THREAD: {
+        guest_thread *t = thread_handle(v, a[0]);
+        if (!t || t->phase == THREAD_ENDED) { v->last_error = 6; return UINT32_MAX; }
+        unsigned previous = t->suspend;
+        if (id == RESUME_THREAD) { if (t->suspend) t->suspend--; }
+        else if (t->suspend == 127) { v->last_error = 87; return UINT32_MAX; }
+        else t->suspend++;
+        if (t == &v->threads[v->current]) v->yielded = true;
+        return previous;
+    }
+    case WAIT_SINGLE: {
+        int signaled = object_signaled(v, a[0], true, v->current);
+        if (signaled < 0) { v->last_error = 6; return UINT32_MAX; }
+        if (signaled) return 0;
+        uint32_t timeout = (uint32_t)a[1];
+        if (!timeout) return 258;
+        guest_thread *t = &v->threads[v->current];
+        t->state = WAIT_OBJECT; t->wait_handle = a[0];
+        t->deadline = timeout == UINT32_MAX ? UINT64_MAX : now_ms()+timeout;
+        return 0;
+    }
+    case CREATE_EVENT:
+        if (a[0] || a[3]) { v->last_error = 50; return 0; }
+        for (unsigned i = 0; i < 64; i++) if (!v->events[i].used) {
+            v->events[i] = (guest_event){.used=true,.manual=a[1]!=0,.signaled=a[2]!=0}; return 0x3000+i;
+        }
+        v->last_error = 8; return 0;
+    case SET_EVENT: case RESET_EVENT:
+        if (a[0] < 0x3000 || a[0] >= 0x3040 || !v->events[a[0]-0x3000].used) { v->last_error = 6; return 0; }
+        v->events[a[0]-0x3000].signaled = id == SET_EVENT; return 1;
+    case SLEEP_THREAD: {
+        if ((uint32_t)a[0] == UINT32_MAX) { v->last_error = 50; return 0; }
+        guest_thread *t = &v->threads[v->current];
+        if ((uint32_t)a[0]) { t->state = SLEEPING; t->deadline = now_ms()+(uint32_t)a[0]; }
+        v->yielded = true; return 0;
+    }
+    case SWITCH_THREAD:
+        v->yielded = true;
+        for (unsigned i = 0; i < v->thread_count; i++) if (i != v->current && v->threads[i].phase != THREAD_ENDED &&
+            v->threads[i].state == READY && !v->threads[i].suspend) return 1;
+        return 0;
+    case TLS_ALLOC:
+        for (unsigned i = 0; i < 64; i++) if (!v->tls_indices[i]) { v->tls_indices[i] = true; return i; }
+        v->last_error = 8; return UINT32_MAX;
+    case TLS_FREE: case TLS_GET: case TLS_SET: {
+        unsigned index = (unsigned)a[0];
+        if (a[0] >= 64 || !v->tls_indices[index]) { v->last_error = 87; return 0; }
+        if (id == TLS_FREE) {
+            v->tls_indices[index] = false;
+            for (unsigned i = 0; i < v->thread_count; i++) {
+                write_mem(v, TLS_BASE+i*TLS_STRIDE+(v->word == 8 ? 0x1480 : 0xe10)+index*v->word, 0, v->word);
+            }
+            return !v->failed;
+        }
+        if (id == TLS_GET) { v->last_error = 0; return read_mem(v, thread_tls_base(v)+(v->word == 8 ? 0x1480 : 0xe10)+index*v->word, v->word); }
+        write_mem(v, thread_tls_base(v)+(v->word == 8 ? 0x1480 : 0xe10)+index*v->word, a[1], v->word);
+        return !v->failed;
+    }
+    case CRITICAL_INIT: {
+        uint8_t *data = memory(v, a[0], v->word == 8 ? 40 : 24);
+        if (!data) return 0;
+        if (critical_at(v, a[0])) { fault(v, "critical section is already initialized"); return 0; }
+        for (unsigned i = 0; i < 64; i++) if (!v->critical[i].used) {
+            v->critical[i] = (guest_critical){.used=true,.address=a[0]};
+            memset(data, 0, v->word == 8 ? 40 : 24); critical_fields(v, &v->critical[i]); return 0;
+        }
+        fault(v, "critical section limit exceeded"); return 0;
+    }
+    case CRITICAL_ENTER: case CRITICAL_LEAVE: case CRITICAL_DELETE: {
+        guest_critical *c = critical_at(v, a[0]);
+        if (!c) { fault(v, "uninitialized critical section"); return 0; }
+        if (id == CRITICAL_ENTER) {
+            if (!c->owner || c->owner == v->current+1) { c->owner = v->current+1; c->recursion++; }
+            else {
+                guest_thread *t = &v->threads[v->current];
+                t->state = WAIT_CRITICAL; t->wait_handle = a[0]; t->deadline = UINT64_MAX;
+            }
+        } else if (id == CRITICAL_LEAVE) {
+            if (c->owner != v->current+1 || !c->recursion) { fault(v, "critical section is not owned by the current thread"); return 0; }
+            if (!--c->recursion) c->owner = 0;
+        } else {
+            if (c->owner) { fault(v, "cannot delete an owned critical section"); return 0; }
+            c->used = false;
+        }
+        critical_fields(v, c); return 0;
+    }
+    case FIND_RESOURCE: {
+        if (a[0] && a[0] != v->pe->image_base) { v->last_error = 126; return 0; }
+        uint16_t names[512], types[512]; lw_resource_key name, type; lw_resource result;
+        if (!resource_key(v, a[1], names, &name) || !resource_key(v, a[2], types, &type)) return 0;
+        uint32_t error = lw_resource_find(v->pe, v->image, &type, &name, &result);
+        if (error) { v->last_error = error; return 0; }
+        for (unsigned i = 0; i < v->resource_count; i++) if (v->resources[i].entry == result.entry) return 0x9000+i;
+        if (v->resource_count == 64) { v->last_error = 8; return 0; }
+        unsigned i = v->resource_count++; v->resources[i] = result; return 0x9000+i;
+    }
+    case SIZEOF_RESOURCE: case LOAD_RESOURCE: {
+        if (a[0] && a[0] != v->pe->image_base) { v->last_error = 126; return 0; }
+        if (a[1] < 0x9000 || a[1]-0x9000 >= v->resource_count) { v->last_error = 6; return 0; }
+        unsigned i = (unsigned)(a[1]-0x9000);
+        if (id == SIZEOF_RESOURCE) return v->resources[i].size;
+        v->resource_loaded[i] = true; return 0xa000+i;
+    }
+    case LOCK_RESOURCE: {
+        if (a[0] < 0xa000 || a[0]-0xa000 >= v->resource_count || !v->resource_loaded[a[0]-0xa000]) { v->last_error = 6; return 0; }
+        return v->pe->image_base + v->resources[a[0]-0xa000].data;
+    }
+    case GET_HEAP: return LW_PROCESS_HEAP;
+    case HEAP_CREATE:
+        if (a[0] & ~1U) { v->last_error = 50; return 0; }
+        return lw_heap_create(v->memory, a[1], a[2], &v->last_error);
+    case HEAP_DESTROY: return lw_heap_destroy(v->memory, a[0], &v->last_error);
+    case HEAP_ALLOC: return lw_heap_alloc(v->memory, a[0], a[2], (uint32_t)a[1], &v->last_error);
+    case HEAP_FREE:
+        if (a[1] & ~1U) { v->last_error = 50; return 0; }
+        return lw_heap_free(v->memory, a[0], a[2], &v->last_error);
+    case LOCAL_ALLOC:
+        if (a[0] & ~0x40U) { v->last_error = 50; return 0; }
+        return lw_heap_alloc(v->memory, LW_PROCESS_HEAP, a[1], a[0] & 0x40 ? 8 : 0, &v->last_error);
+    case LOCAL_FREE: return lw_heap_free(v->memory, LW_PROCESS_HEAP, a[0], &v->last_error) ? 0 : a[0];
+    case VIRTUAL_ALLOC:
+        if (a[1] > mask(v->pe->bits)-a[0]) { v->last_error = 87; return 0; }
+        return lw_virtual_alloc(v->memory, a[0], a[1], (uint32_t)a[2], (uint32_t)a[3], &v->last_error);
+    case VIRTUAL_FREE: return lw_virtual_free(v->memory, a[0], a[1], (uint32_t)a[2], &v->last_error);
+    case VIRTUAL_PROTECT: {
+        if (!a[3]) { v->last_error = 87; return 0; }
+        if (!memory(v, a[3], 4)) return 0;
+        uint32_t old;
+        if (!lw_virtual_protect(v->memory, a[0], a[1], (uint32_t)a[2], &old, &v->last_error)) return 0;
+        write_mem(v, a[3], old, 4); return !v->failed;
+    }
+    case VIRTUAL_QUERY: case VIRTUAL_QUERY_EX: {
+        if (id == VIRTUAL_QUERY_EX) {
+            if (a[0] != mask(v->pe->bits)) { v->last_error = 6; return 0; }
+            a++;
+        }
+        unsigned size = v->word == 8 ? 48 : 28;
+        if (!a[1] || a[2] < size) { v->last_error = 24; return 0; }
+        uint8_t *data = memory(v, a[1], size);
+        if (!data) return 0;
+        lw_memory_info info;
+        if (!lw_virtual_query(v->memory, a[0], &info)) { v->last_error = 87; return 0; }
+        memset(data, 0, size);
+        write_mem(v, a[1], info.base, v->word); write_mem(v, a[1]+v->word, info.allocation_base, v->word);
+        write_mem(v, a[1]+v->word*2, info.allocation_protect, 4);
+        unsigned offset = v->word == 8 ? 24 : 12;
+        write_mem(v, a[1]+offset, info.size, v->word); offset += v->word;
+        write_mem(v, a[1]+offset, info.state, 4); write_mem(v, a[1]+offset+4, info.protect, 4); write_mem(v, a[1]+offset+8, info.type, 4);
+        return size;
+    }
     case GET_ACP: return LW_ANSI_CODE_PAGE;
     case GET_CP_INFO: case GET_CP_INFO_EX: {
         bool extended = id == GET_CP_INFO_EX;
@@ -530,7 +1024,7 @@ static uint64_t dispatch(vm *v, int id, uint64_t *a)
 }
 static void call_api(vm *v, int index)
 {
-    uint64_t a[8] = {0};
+    uint64_t a[12] = {0};
     for (unsigned i = 0; i < apis[index].argc; i++) {
         if (v->word == 8 && i < 4) a[i] = v->r[(unsigned[]){1, 2, 8, 9}[i]];
         else a[i] = read_mem(v, v->r[4] + (v->word == 8 ? 40 + (uint64_t)(i - 4) * 8 : (uint64_t)(i + 1) * 4), v->word);
@@ -538,7 +1032,7 @@ static void call_api(vm *v, int index)
     if (v->failed) return;
     v->calls++;
     uint64_t result = dispatch(v, index, a);
-    if (v->failed || v->done) return;
+    if (v->failed || v->done || v->thread_exit) return;
     set_reg(v, 0, result, v->pe->bits);
     if (v->word == 4 && index == GET_TICK_COUNT64) v->r[2] = result >> 32;
     v->ip = pop(v);
@@ -561,10 +1055,26 @@ static bool executable_address(vm *v, uint64_t address)
     }
     return false;
 }
+static uint8_t *allocate_tls(vm *v, unsigned index)
+{
+    uint8_t *data = calloc(1, v->tls_size);
+    uint64_t base = TLS_BASE+index*TLS_STRIDE;
+    if (!data) return NULL;
+    if (!lw_memory_map(v->memory, base, v->tls_size, data, 4, 0x20000)) { free(data); return NULL; }
+    if (v->tls_initialized) memcpy(data+TLS_FIXED_SIZE, v->image+(v->tls_template-v->pe->image_base), v->tls_initialized);
+    write_mem(v, base+(v->word == 8 ? 0x30 : 0x18), base, v->word);
+    write_mem(v, base+(v->word == 8 ? 0x58 : 0x2c), base+4096, v->word);
+    write_mem(v, base+4096, base+TLS_FIXED_SIZE, v->word);
+    return data;
+}
 static void prepare_tls(vm *v)
 {
     uint32_t rva = v->pe->directories[9][0], size = v->pe->directories[9][1];
-    if (!rva && !size) return;
+    if (!rva && !size) {
+        v->tls_size = TLS_FIXED_SIZE; v->tls = allocate_tls(v, 0);
+        if (!v->tls) fault(v, "cannot allocate thread environment");
+        return;
+    }
     unsigned header_size = v->word * 4 + 8;
     uint64_t directory = v->pe->image_base + rva;
     if (!rva || size < header_size || !image_span(v, directory, size)) {
@@ -600,41 +1110,135 @@ static void prepare_tls(vm *v)
     /* One image, one main thread, one static TLS slot. The block base is 8 KiB
        aligned in guest address space, covering every PE TLS alignment value. */
     v->tls_size = TLS_FIXED_SIZE + (size_t)(initialized + zero_fill);
-    v->tls = calloc(1, v->tls_size);
+    v->tls_initialized = (size_t)initialized; v->tls_template = start;
+    v->tls = allocate_tls(v, 0);
     if (!v->tls) { fault(v, "cannot allocate TLS memory"); return; }
-    if (initialized) memcpy(v->tls + TLS_FIXED_SIZE, v->image + (start - v->pe->image_base), (size_t)initialized);
-    write_mem(v, TLS_BASE + (v->word == 8 ? 0x30 : 0x18), TLS_BASE, v->word);
-    write_mem(v, TLS_BASE + (v->word == 8 ? 0x58 : 0x2c), TLS_BASE + 4096, v->word);
-    write_mem(v, TLS_BASE + 4096, TLS_BASE + TLS_FIXED_SIZE, v->word);
     write_mem(v, index, 0, 4);
+}
+static uint64_t create_thread(vm *v, uint64_t *a)
+{
+    if (a[0] || (a[4] & ~4U)) { v->last_error = 50; return 0; }
+    if (a[1] > STACK_SIZE || !lw_memory_access(v->memory, a[2], 1, LW_EXECUTE)) { v->last_error = 87; return 0; }
+    if (a[5] && !memory(v, a[5], 4)) return 0;
+    if (v->thread_count == MAX_THREADS) { v->last_error = 8; return 0; }
+    unsigned i = v->thread_count;
+    uint64_t stack_base = STACK_BASE+i*(uint64_t)STACK_SIZE;
+    uint8_t *stack = calloc(1, STACK_SIZE);
+    if (!stack || !lw_memory_map(v->memory, stack_base, STACK_SIZE, stack, 4, 0x20000)) { free(stack); v->last_error = 8; return 0; }
+    uint8_t *tls = allocate_tls(v, i);
+    if (!tls) { lw_memory_unmap_borrowed(v->memory, stack_base); free(stack); v->last_error = 8; return 0; }
+    v->threads[i] = (guest_thread){.stack=stack,.tls=tls,.start=a[2],.parameter=a[3],
+        .id=0x40000000U+i,.suspend=a[4] ? 1U : 0U,.open=true};
+    v->thread_count++;
+    if (a[5]) write_mem(v, a[5], v->threads[i].id, 4);
+    return 0x2000+i;
 }
 static void execute(vm *v, uint64_t budget)
 {
-    while (!v->failed && !v->done && v->ip != RETURN_ADDRESS) {
+    guest_thread *t = &v->threads[v->current];
+    for (unsigned quantum = 0; quantum < 256 && !v->failed && !v->done && !v->thread_exit && !v->yielded &&
+            t->state == READY && !t->suspend && v->ip != RETURN_ADDRESS; quantum++) {
         if (v->instructions >= budget) { fault(v, "instruction budget exhausted at guest IP 0x%" PRIx64, v->ip); break; }
-        if (v->ip > API_BASE && v->ip <= API_BASE + API_COUNT * 16 && (v->ip - API_BASE) % 16 == 0)
+        if (v->ip > TRAP_BASE && v->ip <= TRAP_BASE+v->trap_count*16 && (v->ip-TRAP_BASE)%16 == 0) {
+            const lw_import *item = &v->traps[(v->ip-TRAP_BASE)/16-1];
+            if (item->by_ordinal) fault(v, "called unimplemented import %s!#%u at guest IP 0x%" PRIx64, item->dll, item->ordinal, v->origin);
+            else fault(v, "called unimplemented import %s!%s at guest IP 0x%" PRIx64, item->dll, item->name, v->origin);
+        } else if (v->ip > API_BASE && v->ip <= API_BASE + API_COUNT * 16 && (v->ip - API_BASE) % 16 == 0)
             call_api(v, (int)((v->ip - API_BASE) / 16) - 1);
         else { v->instructions++; instruction(v); }
     }
 }
-static void enter(vm *v, uint64_t address, bool callback)
+static void enter(vm *v, uint64_t address, unsigned reason, bool child)
 {
     memset(v->r, 0, sizeof(v->r)); v->flags = 0;
     v->ip = address;
-    v->r[4] = STACK_BASE + STACK_SIZE - 0x100;
+    v->r[4] = STACK_BASE + (v->current+1)*(uint64_t)STACK_SIZE - 0x100;
     if (v->word == 8) {
         v->r[4] -= 32; /* Windows x64 shadow space; callee RSP is 8 mod 16. */
-        if (callback) { v->r[1] = v->pe->image_base; v->r[2] = 1; }
-    } else if (callback) {
-        push(v, 0); push(v, 1); push(v, v->pe->image_base);
+        if (reason) { v->r[1] = v->pe->image_base; v->r[2] = reason; }
+        else if (child) v->r[1] = v->threads[v->current].parameter;
+    } else if (reason) {
+        push(v, 0); push(v, reason); push(v, v->pe->image_base);
+    } else if (child) {
+        push(v, v->threads[v->current].parameter);
     }
     push(v, RETURN_ADDRESS);
 }
+static void schedule(vm *v, uint64_t budget)
+{
+    unsigned next = 0;
+    while (!v->failed && !v->done) {
+        uint64_t now = now_ms(), earliest = UINT64_MAX;
+        bool living = false; int chosen = -1;
+        for (unsigned n = 0; n < v->thread_count; n++) {
+            unsigned i = (next+n)%v->thread_count;
+            guest_thread *t = &v->threads[i];
+            if (t->phase == THREAD_ENDED) continue;
+            living = true;
+            if (t->state == WAIT_OBJECT) {
+                int signaled = object_signaled(v, t->wait_handle, true, i);
+                if (signaled || now >= t->deadline) {
+                    t->r[0] = signaled < 0 ? UINT32_MAX : signaled ? 0 : 258;
+                    if (signaled < 0) t->last_error = 6;
+                    t->state = READY;
+                }
+                if (!signaled && t->wait_handle >= 0x4000 && t->wait_handle < 0x4010 && now+1 < earliest) earliest = now+1;
+            } else if (t->state == WAIT_CRITICAL) {
+                guest_critical *c = critical_at(v, t->wait_handle);
+                if (!c) { fault(v, "critical section deleted while a thread was waiting"); break; }
+                if (!c->owner) { c->owner = i+1; c->recursion = 1; t->state = READY; critical_fields(v, c); }
+            } else if (t->state == SLEEPING && now >= t->deadline) t->state = READY;
+            if (t->state != READY && t->deadline < earliest) earliest = t->deadline;
+            if (t->state == READY && !t->suspend && chosen < 0 &&
+                (!i || v->threads[0].phase != THREAD_ATTACH)) chosen = (int)i;
+        }
+        if (!living) { v->done = true; break; }
+        if (chosen < 0) {
+            if (earliest == UINT64_MAX) { fault(v, "guest threads are deadlocked or all suspended"); break; }
+            uint64_t delay = earliest > now ? earliest-now : 0;
+            if (delay > 10) delay = 10;
+            struct timespec sleep = {.tv_sec=0,.tv_nsec=(long)delay*1000000};
+            nanosleep(&sleep, NULL); continue;
+        }
+        v->current = (unsigned)chosen; guest_thread *t = &v->threads[v->current];
+        memcpy(v->r, t->r, sizeof(v->r)); v->ip = t->ip; v->flags = t->flags; v->last_error = t->last_error;
+        v->yielded = v->thread_exit = false;
+        if (!t->entered) {
+            if (t->phase == THREAD_ATTACH || t->phase == THREAD_DETACH) {
+                if (t->callback == v->tls_callback_count) {
+                    t->phase = t->phase == THREAD_ATTACH ? THREAD_BODY : THREAD_ENDED;
+                    t->callback = 0;
+                    if (t->phase == THREAD_ENDED) { v->exit_code = t->exit_code; continue; }
+                } else {
+                    enter(v, v->tls_callbacks[t->callback], t->phase == THREAD_DETACH ? 3 : v->current ? 2 : 1, false);
+                    t->entered = true;
+                }
+            }
+            if (!t->entered && t->phase == THREAD_BODY) { enter(v, t->start, 0, v->current != 0); t->entered = true; }
+        }
+        execute(v, budget);
+        if (v->thread_exit) {
+            t->exit_code = v->thread_exit_code;
+            t->phase = t->phase == THREAD_DETACH ? THREAD_ENDED : THREAD_DETACH;
+            if (t->phase == THREAD_ENDED) v->exit_code = t->exit_code;
+            t->callback = 0; t->entered = false; t->state = READY;
+        } else if (v->ip == RETURN_ADDRESS && !v->failed && !v->done) {
+            if (t->phase == THREAD_BODY) {
+                t->exit_code = (uint32_t)v->r[0];
+                if (!v->current) { v->exit_code = t->exit_code; v->done = true; }
+                else { t->phase = THREAD_DETACH; t->callback = 0; t->entered = false; }
+            } else { t->callback++; t->entered = false; }
+        }
+        memcpy(t->r, v->r, sizeof(v->r)); t->ip = v->ip; t->flags = v->flags; t->last_error = v->last_error;
+        next = (v->current+1)%v->thread_count;
+    }
+}
 
-int lw_run(const lw_pe *pe, const char *root, uint64_t budget, lw_result *out, char *e, size_t en)
+int lw_run(const lw_pe *pe, const lw_run_options *options, lw_result *out, char *e, size_t en)
 {
     memset(out, 0, sizeof(*out));
-    vm v = {.pe = pe, .word = pe->bits / 8, .error = e, .error_size = en, .root = -1};
+    vm v = {.pe = pe, .options=options, .word = pe->bits / 8, .error = e, .error_size = en, .root = -1};
+    const char *root = options->root;
     struct timespec start, end; clock_gettime(CLOCK_MONOTONIC, &start);
     for (unsigned i = 0; i < 64; i++) v.files[i] = -1;
     if ((pe->machine != 0x8664 && pe->machine != 0x14c) || (pe->characteristics & 0x2000) ||
@@ -643,38 +1247,58 @@ int lw_run(const lw_pe *pe, const char *root, uint64_t budget, lw_result *out, c
     }
     if (pe->image_size > 64 * 1024 * 1024 || pe->image_base > UINT64_MAX - pe->image_size ||
         pe->image_base + pe->image_size > mask(pe->bits) ||
-        (pe->image_base < STACK_BASE + STACK_SIZE && pe->image_base + pe->image_size > STACK_BASE) ||
-        (pe->image_base < TLS_BASE + TLS_FIXED_SIZE + TLS_MAX_SIZE && pe->image_base + pe->image_size > TLS_BASE) ||
-        (pe->image_base < RETURN_ADDRESS + 16 && pe->image_base + pe->image_size > API_BASE)) {
+        (pe->image_base < PARAMETERS_BASE + PARAMETERS_SIZE && pe->image_base + pe->image_size > STACK_BASE) ||
+        (pe->image_base < RETURN_ADDRESS + 16 && pe->image_base + pe->image_size > TRAP_BASE)) {
         fault(&v, "guest image size or address conflicts with prototype limits"); goto cleanup;
     }
-    v.image = calloc(1, pe->image_size); v.stack = calloc(1, STACK_SIZE);
-    if (!v.image || !v.stack) { fault(&v, "cannot allocate guest memory"); goto cleanup; }
+    v.image = calloc(1, pe->image_size); v.stack = calloc(1, STACK_SIZE); v.memory = lw_memory_create();
+    if (!v.image || !v.stack || !v.memory) { fault(&v, "cannot allocate guest memory"); goto cleanup; }
+    if (!lw_memory_map(v.memory, pe->image_base, pe->image_size, v.image, 0x40, 0x1000000) ||
+        !lw_memory_map(v.memory, STACK_BASE, STACK_SIZE, v.stack, 4, 0x20000)) { fault(&v, "cannot map guest image and stack"); goto cleanup; }
     memcpy(v.image, pe->data, pe->headers_size);
     for (unsigned i = 0; i < pe->section_count; i++) memcpy(v.image + pe->sections[i].rva, pe->data + pe->sections[i].raw, pe->sections[i].raw_size);
     if (lw_pe_imports(pe, bind_import, &v, e, en)) { v.failed = true; goto cleanup; }
     prepare_tls(&v);
     if (v.failed) goto cleanup;
+    v.thread_count = 1;
+    v.threads[0] = (guest_thread){.stack=v.stack,.tls=v.tls,.start=pe->image_base+pe->entry,.id=(unsigned)getpid()};
     if (mkdir(root, 0700) && errno != EEXIST) { fault(&v, "cannot create guest drive: %s", strerror(errno)); goto cleanup; }
     v.root = open(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (v.root < 0) { fault(&v, "cannot open guest drive: %s", strerror(errno)); goto cleanup; }
-    for (unsigned i = 0; i < v.tls_callback_count && !v.failed && !v.done; i++) {
-        enter(&v, v.tls_callbacks[i], true);
-        execute(&v, budget);
+    v.processes = lw_processes_create(v.root, options->host_executable, root, options->defer_imports, options->budget, options->process_depth);
+    if (!v.processes) { fault(&v, "cannot initialize guest process launcher"); goto cleanup; }
+    v.parameters = calloc(1, PARAMETERS_SIZE);
+    if (!v.parameters || !lw_memory_map(v.memory, PARAMETERS_BASE, PARAMETERS_SIZE, v.parameters, 4, 0x20000)) {
+        fault(&v, "cannot allocate process parameters"); goto cleanup;
     }
-    if (!v.failed && !v.done) {
-        enter(&v, pe->image_base + pe->entry, false);
-        execute(&v, budget);
-        if (!v.failed && !v.done) { v.exit_code = (uint32_t)v.r[0]; v.done = true; }
+    char image_path[4096], command[8192];
+    const char *basename = strrchr(options->image_path, '/');
+    snprintf(image_path, sizeof(image_path), "C:\\%s", basename ? basename+1 : options->image_path);
+    const char *image_name = options->guest_image ? options->guest_image : image_path;
+    if (strlen(image_name) >= sizeof(v.module_utf8) || strncmp(image_name, "C:\\", 3)) {
+        fault(&v, "guest module path must be an absolute C: path"); goto cleanup;
     }
+    strcpy(v.module_utf8, image_name);
+    snprintf(command, sizeof(command), "\"%s\"", image_name);
+    const char *command_text = options->command_line ? options->command_line : command;
+    size_t module_units, command_units;
+    if (lw_utf8_to_utf16((const uint8_t *)image_name, strlen(image_name)+1, v.parameters, 8192, true, &module_units) ||
+        lw_utf8_to_utf16((const uint8_t *)command_text, strlen(command_text)+1, v.parameters+16384, 16384, true, &command_units)) {
+        fault(&v, "process path or command line exceeds prototype limits"); goto cleanup;
+    }
+    v.module_path = PARAMETERS_BASE; v.module_length = module_units-1; v.command_line = PARAMETERS_BASE+16384;
+    schedule(&v, options->budget);
 cleanup:
+    lw_processes_destroy(v.processes);
     for (unsigned i = 0; i < 64; i++) if (v.files[i] >= 0) close(v.files[i]);
     if (v.root >= 0) close(v.root);
-    free(v.image); free(v.stack); free(v.tls);
+    out->guest_memory_bytes = lw_memory_size(v.memory);
+    lw_memory_destroy(v.memory); free(v.image); free(v.stack); free(v.tls);
+    free(v.traps); free(v.parameters);
+    for (unsigned i = 1; i < v.thread_count; i++) { free(v.threads[i].stack); free(v.threads[i].tls); }
     clock_gettime(CLOCK_MONOTONIC, &end);
     out->guest_exit_code = v.exit_code; out->instructions = v.instructions; out->api_calls = v.calls;
     out->elapsed_ms = (double)(end.tv_sec - start.tv_sec) * 1000 + (double)(end.tv_nsec - start.tv_nsec) / 1000000;
-    out->guest_memory_bytes = (size_t)pe->image_size + STACK_SIZE + v.tls_size;
     struct rusage usage;
     if (!getrusage(RUSAGE_SELF, &usage)) {
 #ifdef __APPLE__

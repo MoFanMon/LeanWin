@@ -87,7 +87,7 @@ class Program:
 
     def prologue(self):
         if self.bits == 64:
-            self.emit(b"\x48\x83\xec\x48")
+            self.emit(b"\x48\x83\xec\x68")
 
     def exit(self, code):
         self.invoke("ExitProcess", [code])
@@ -107,8 +107,10 @@ class Program:
         self.call(name)
 
     def image(self):
-        assert len(self.code) <= 1024
-        data = bytearray(0x600 + len(self.data))
+        assert len(self.code) <= 4096
+        text_raw = max(0x400, (len(self.code) + 511) & ~511)
+        data_raw = 0x200 + text_raw
+        data = bytearray(data_raw + len(self.data))
         data[:2] = b"MZ"
         struct.pack_into("<I", data, 0x3c, 0x80)
         data[0x80:0x84] = b"PE\0\0"
@@ -117,7 +119,7 @@ class Program:
                          0x8664 if self.bits == 64 else 0x14c, 2, 0, 0, 0, size, 0x22 if self.bits == 64 else 0x102)
         opt = 0x98
         struct.pack_into("<H", data, opt, 0x20b if self.bits == 64 else 0x10b)
-        struct.pack_into("<II", data, opt + 4, 0x400, 0x1000)
+        struct.pack_into("<II", data, opt + 4, text_raw, 0x1000)
         struct.pack_into("<I", data, opt + 16, TEXT)
         struct.pack_into("<I", data, opt + 20, TEXT)
         if self.bits == 32:
@@ -136,14 +138,14 @@ class Program:
         directories = opt + (112 if self.bits == 64 else 96)
         struct.pack_into("<II", data, directories + 8, DATA, self.import_size)
         for i, (name, rva, raw, raw_size, flags) in enumerate([
-                (b".text", TEXT, 0x200, 0x400, 0x60000020),
-                (b".data", DATA, 0x600, 0x1000, 0xc0000040)]):
+                (b".text", TEXT, 0x200, text_raw, 0x60000020),
+                (b".data", DATA, data_raw, 0x1000, 0xc0000040)]):
             section = opt + size + i * 40
             data[section:section + 8] = name.ljust(8, b"\0")
             struct.pack_into("<IIII", data, section + 8, 0x1000, rva, raw_size, raw)
             struct.pack_into("<I", data, section + 36, flags)
         data[0x200:0x200 + len(self.code)] = self.code
-        data[0x600:] = self.data
+        data[data_raw:] = self.data
         return data
 
 

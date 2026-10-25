@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import random
 import re
+import struct
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 from test_pe import pe_fixture
 from test_tls import TLSProgram, DATA
+from test_resources import resource_probe
 
 
 def main():
@@ -83,6 +85,19 @@ def main():
                          "--max-steps", "1000"], capture_output=True, env=env, timeout=3)
             if result.returncode < 0 or b"AddressSanitizer" in result.stderr or b"runtime error:" in result.stderr:
                 raise RuntimeError(("TLS", i, result.returncode, result.stderr.decode(errors="replace")))
+        for i in range(120):
+            p = resource_probe(32 if i % 2 else 64, bool(i % 3))
+            data = p.image()
+            section_table = 0x98 + (224 if p.bits == 32 else 240)
+            data_raw = struct.unpack_from("<I", data, section_table+40+20)[0]
+            for _ in range(1+i % 5):
+                offset = data_raw+0x400+randomizer.randrange(0x104)
+                data[offset] = randomizer.randrange(256)
+            path.write_bytes(data)
+            result = subprocess.run([str(binary), "run", str(path), "--root", str(folder / "drive"),
+                         "--max-steps", "1000"], capture_output=True, env=env, timeout=3)
+            if result.returncode < 0 or b"AddressSanitizer" in result.stderr or b"runtime error:" in result.stderr:
+                raise RuntimeError(("resource", i, result.returncode, result.stderr.decode(errors="replace")))
         # Negative-path tests capture stderr and may intentionally accept nonzero
         # exits. Sanitizer logs still make any instrumented process failure fatal.
         logs = [p for p in folder.glob("sanitizer.*") if p.stat().st_size]
@@ -93,6 +108,7 @@ def main():
               "sanitized_unit_tests": int(sanitized_count.group(1)),
               "deterministic_mutated_pe_inputs": 120, "sanitized_execution_examples": 4,
               "deterministic_mutated_tls_execution_inputs": 120,
+              "deterministic_mutated_resource_execution_inputs": 120,
               "sanitizer_status": "PASS", "visible_gui_validation": "NOT AUTOMATED: compiled only",
               "native_windows_cross_validation": "NOT RUN"}
     (ROOT / "reports").mkdir(exist_ok=True)

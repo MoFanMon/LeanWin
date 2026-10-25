@@ -1,422 +1,502 @@
 {
-  "generated_at_utc": "2026-10-25T08:32:11.711427+00:00",
+  "generated_at_utc": "2026-10-25T09:33:57.250021+00:00",
   "host_architecture": "arm64",
   "system": "macOS-26.3.1-arm64-arm-64bit",
-  "binary_bytes": 53272,
+  "binary_bytes": 105368,
   "gui_module_bytes": 51184,
   "method": "20 fresh processes per architecture; includes launch, output capture and execution; warm filesystem cache; no baseline competitor",
   "samples": {
     "32": {
-      "process_wall_median_ms": 2.1697295,
-      "runtime_median_ms": 0.029,
-      "host_peak_rss_median_bytes": 1359872.0,
+      "process_wall_median_ms": 2.791708,
+      "runtime_median_ms": 0.0725,
+      "host_peak_rss_median_bytes": 1523712.0,
       "runs": [
         {
-          "process_wall_ms": 3.292833,
+          "process_wall_ms": 3.247958,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.117,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.149,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.592459,
+          "process_wall_ms": 2.780833,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.033,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.069,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.23725,
+          "process_wall_ms": 2.744917,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.028,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.075,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.182542,
+          "process_wall_ms": 3.426166,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.03,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.084,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.096958,
+          "process_wall_ms": 3.174375,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.03,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.074,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.208625,
+          "process_wall_ms": 2.67025,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.029,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.068,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.197292,
+          "process_wall_ms": 2.597708,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.03,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.068,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.065917,
+          "process_wall_ms": 2.541125,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.029,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.066,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.092916,
+          "process_wall_ms": 2.537333,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.029,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.073,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.062083,
+          "process_wall_ms": 2.74025,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.029,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.067,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.263708,
+          "process_wall_ms": 2.781958,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.036,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.066,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.096959,
+          "process_wall_ms": 2.575,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.03,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.071,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.156917,
+          "process_wall_ms": 2.749375,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.028,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.07,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.01625,
+          "process_wall_ms": 2.925875,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.028,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.083,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.258917,
+          "process_wall_ms": 2.891458,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.031,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.075,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.024084,
+          "process_wall_ms": 3.19475,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.027,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.076,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.027709,
+          "process_wall_ms": 3.345791,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.028,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.072,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.189375,
+          "process_wall_ms": 2.801458,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.028,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.072,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.236625,
+          "process_wall_ms": 3.076667,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.027,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.086,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.018584,
+          "process_wall_ms": 3.427792,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 10,
           "api_calls": 3,
-          "elapsed_ms": 0.028,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.111,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         }
       ]
     },
     "64": {
-      "process_wall_median_ms": 2.134979,
-      "runtime_median_ms": 0.03,
-      "host_peak_rss_median_bytes": 1359872.0,
+      "process_wall_median_ms": 3.7263125,
+      "runtime_median_ms": 0.0845,
+      "host_peak_rss_median_bytes": 1523712.0,
       "runs": [
         {
-          "process_wall_ms": 2.084041,
+          "process_wall_ms": 3.757,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.027,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.08,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.170083,
+          "process_wall_ms": 3.627334,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.031,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.083,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.166209,
+          "process_wall_ms": 3.803375,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.029,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.085,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.05975,
+          "process_wall_ms": 4.756834,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.03,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.086,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.044792,
+          "process_wall_ms": 4.004875,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.028,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.087,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.212417,
+          "process_wall_ms": 3.90675,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.033,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.082,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.078667,
+          "process_wall_ms": 3.61375,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.028,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.075,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.0835,
+          "process_wall_ms": 3.343875,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.028,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.082,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.439875,
+          "process_wall_ms": 4.788,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.032,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.086,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.23175,
+          "process_wall_ms": 3.588667,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.03,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.084,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.139333,
+          "process_wall_ms": 3.695625,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.031,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.079,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.153042,
+          "process_wall_ms": 3.475375,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.027,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.085,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.129375,
+          "process_wall_ms": 4.173125,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.031,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.095,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.113125,
+          "process_wall_ms": 3.476,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.031,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.123,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.134875,
+          "process_wall_ms": 3.523041,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.03,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.087,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.196542,
+          "process_wall_ms": 5.458333,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.03,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.105,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.135083,
+          "process_wall_ms": 4.596958,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.031,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.078,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.084084,
+          "process_wall_ms": 3.988,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.03,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.09,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.166708,
+          "process_wall_ms": 3.55675,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.029,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1359872
+          "elapsed_ms": 0.082,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         },
         {
-          "process_wall_ms": 2.084625,
+          "process_wall_ms": 3.19325,
           "backend": "original-x86-interpreter",
           "guest_exit_code": 37,
           "instructions": 11,
           "api_calls": 3,
-          "elapsed_ms": 0.027,
-          "guest_memory_bytes": 1060864,
-          "host_peak_rss_bytes": 1343488
+          "elapsed_ms": 0.08,
+          "guest_memory_bytes": 1134592,
+          "host_peak_rss_bytes": 1523712,
+          "status": "exited",
+          "error": ""
         }
       ]
     }
@@ -426,8 +506,10 @@
     "guest_exit_code": 0,
     "instructions": 200003,
     "api_calls": 1,
-    "elapsed_ms": 2.413,
-    "guest_memory_bytes": 1060864,
-    "host_peak_rss_bytes": 1359872
+    "elapsed_ms": 3.733,
+    "guest_memory_bytes": 1134592,
+    "host_peak_rss_bytes": 1523712,
+    "status": "exited",
+    "error": ""
   }
 }

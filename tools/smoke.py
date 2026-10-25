@@ -13,6 +13,10 @@ sys.path.insert(0, str(ROOT / "tests"))
 from build import console, files
 from test_tls import TLSProgram
 from test_nls import nls_probe, NLS_PROBE_EXPECTED
+from kernel_fixture import Probe, heap_probe, virtual_probe
+from test_resources import resource_probe
+from test_threads import thread_probe, event_probe, thread_tls_probe
+from test_process import process_probe, context_probe
 
 
 def tls_probe(bits):
@@ -64,12 +68,24 @@ def main():
             cases = [("console", console(bits), 37, b"Hello from a Windows EXE on macOS!\r\n"),
                      ("files", files(bits=bits), 0, b"LeanWin file round trip.\n"),
                      ("tls", tls_probe(bits), 0, b""),
-                     ("nls", nls_probe(bits), 0, NLS_PROBE_EXPECTED)]
+                     ("nls", nls_probe(bits), 0, NLS_PROBE_EXPECTED),
+                     ("heap", heap_probe(bits), 0, b""),
+                     ("virtual", virtual_probe(bits), 0, b""),
+                     ("resources", resource_probe(bits, False), 0, b""),
+                     ("named-resources", resource_probe(bits, True), 0, b""),
+                     ("thread", thread_probe(bits), 0, b""),
+                     ("event", event_probe(bits), 0, b""),
+                     ("thread-tls", thread_tls_probe(bits), 0, b""),
+                     ("process", process_probe(bits), 0, b""),
+                     ("context", context_probe(bits), 0, b"")]
             for name, program, expected_exit, expected_stdout in cases:
                 folder = Path(directory) / f"{name}{bits}"
                 folder.mkdir()
                 executable = folder / "test.exe"
                 executable.write_bytes(program.image())
+                if name == "process":
+                    child = Probe([], bits); child.exit(37)
+                    (folder / "child.exe").write_bytes(child.image())
                 command = [str(runner), "run", str(executable), "--root", str(folder)] if runner else [str(executable)]
                 result = subprocess.run(command, cwd=folder, capture_output=True, timeout=10)
                 if result.returncode != expected_exit or result.stdout != expected_stdout:
