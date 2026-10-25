@@ -23,7 +23,9 @@ class ResourceProbe(Probe):
                                     (40, 0x80000090 if named else 7, 0x80000030), (64, 0x409, 72)]:
             struct.pack_into("<II", self.data, self.resource_root + offset, key, target)
         struct.pack_into("<IIII", self.data, self.resource_root + 72, 0x2500, 4, 0, 0)
-        for offset, text in ((0x80, "TYPE"), (0x90, "Sample")):
+        # Win32 resource APIs uppercase string keys before lookup. Resource
+        # compilers store uppercase directory keys, unlike arbitrary PE strings.
+        for offset, text in ((0x80, "TYPE"), (0x90, "SAMPLE")):
             struct.pack_into("<H", self.data, self.resource_root + offset, len(text))
             self.data[self.resource_root+offset+2:self.resource_root+offset+2+len(text)*2] = text.encode("utf-16le")
         self.data[0x500:0x504] = b"\x11\x22\x33\x44"
@@ -38,7 +40,7 @@ class ResourceProbe(Probe):
 def resource_probe(bits=64, named=False):
     p = ResourceProbe(bits, named)
     name = p.base + p.wide("Sample") if named else 7
-    kind = p.base + p.wide("TYPE") if named else 10
+    kind = p.base + p.wide("TyPe") if named else 10
     p.invoke("FindResourceW", [0, name, kind]); p.nonzero(); p.copy(3, 0)
     p.invoke("SizeofResource", [0, (3,)]); p.equal(4)
     p.invoke("LoadResource", [0, (3,)]); p.nonzero()

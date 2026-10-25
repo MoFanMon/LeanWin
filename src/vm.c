@@ -680,6 +680,7 @@ static bool resource_key(vm *v, uint64_t address, uint16_t *text, lw_resource_ke
     for (unsigned i = 0; i < 512; i++) {
         text[i] = (uint16_t)read_mem(v, address+i*2, 2);
         if (v->failed) return false;
+        if (text[i] >= 'a' && text[i] <= 'z') text[i] -= 'a'-'A';
         if (!text[i]) { *key = (lw_resource_key){.text=text,.length=i,.named=true}; return true; }
     }
     v->last_error = 87; return false;

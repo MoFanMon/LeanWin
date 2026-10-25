@@ -30,7 +30,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="leanwin-sanitize-") as directory:
         folder = Path(directory)
         binary = folder / "leanwin-asan"
-        subprocess.run([os.environ.get("CC", "cc"), "-D_POSIX_C_SOURCE=200809L", "-D_DARWIN_C_SOURCE",
+        subprocess.run([os.environ.get("CC", "cc"), "-D_POSIX_C_SOURCE=200809L", "-D_XOPEN_SOURCE=700", "-D_DARWIN_C_SOURCE",
                         "-std=c11", "-O1", "-g", "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
                         *[str(p) for p in sorted((ROOT / "src").glob("*.c"))],
                         "-o", str(binary)], check=True)
