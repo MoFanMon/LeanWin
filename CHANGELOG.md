@@ -11,6 +11,7 @@
 - 补充实际启动路径遇到的字节读写、SETcc、标志保存恢复、CPUID、整数乘法/移位、MOVS/STOS；CPUID 不声明尚未实现的浮点和 SIMD 功能。
 - 增加 `--defer-imports` 诊断模式：缺失入口在被调用时失败；运行报告保留失败前的真实指令与接口计数。
 - 普通版与 ASan/UBSan 版各通过 87 项测试；增加 120 个资源目录变异执行输入。原生 Windows 对照覆盖扩展为 26 项。
+- 修正 glibc 的 XSI 声明配置和 Win32 资源名称大写查询规则后，macOS、Linux 的完整检查与 Windows 的 26 项原生执行全部通过；准确提交见 `reports/ci.json`。
 - DeepSeekQQ 仍不能完成安装：诊断模式执行到 619 条指令、3 次接口调用后，遇到 SSE2 MOVD；153 项静态导入中仍缺少 92 项入口名称。详见 `reports/deepseekqq.json`。
 
 ### 字符编码与导入诊断

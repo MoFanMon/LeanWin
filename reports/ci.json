@@ -1,167 +1,41 @@
 {
   "date": "2026-10-25",
-  "tested_commit": "cb59082367b20c95bbf5f18cbfbf41ab46ac0da9",
-  "workflow_run_id": 40173962767,
-  "workflow_url": "https://github.com/MoFanMon/LeanWin/actions/runs/40173962767",
+  "tested_commit": "de74e57203893df6f34033a3d19337f260fce22c",
+  "workflow_run_id": 40181721510,
+  "workflow_url": "https://github.com/MoFanMon/LeanWin/actions/runs/40181721510",
   "conclusion": "success",
   "jobs": [
     {
-      "job_id": 121110563509,
-      "name": "windows-native",
-      "conclusion": "success",
-      "reports": [
-        {
-          "backend": "native-windows",
-          "cases": [
-            {
-              "name": "console32",
-              "status": "PASS",
-              "exit_code": 37
-            },
-            {
-              "name": "files32",
-              "status": "PASS",
-              "exit_code": 0
-            },
-            {
-              "name": "tls32",
-              "status": "PASS",
-              "exit_code": 0
-            },
-            {
-              "name": "console64",
-              "status": "PASS",
-              "exit_code": 37
-            },
-            {
-              "name": "files64",
-              "status": "PASS",
-              "exit_code": 0
-            },
-            {
-              "name": "tls64",
-              "status": "PASS",
-              "exit_code": 0
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "job_id": 121110563546,
-      "name": "compatibility (macos-14)",
-      "conclusion": "success",
-      "reports": [
-        {
-          "generated_at_utc": "2026-10-25T07:45:57.511374+00:00",
-          "unit_tests": 35,
-          "unit_test_status": "PASS",
-          "sanitizers": [
-            "AddressSanitizer",
-            "UndefinedBehaviorSanitizer"
-          ],
-          "sanitized_unit_tests": 35,
-          "deterministic_mutated_pe_inputs": 120,
-          "sanitized_execution_examples": 4,
-          "deterministic_mutated_tls_execution_inputs": 120,
-          "sanitizer_status": "PASS",
-          "visible_gui_validation": "NOT AUTOMATED: compiled only",
-          "native_windows_cross_validation": "NOT RUN"
-        },
-        {
-          "backend": "leanwin",
-          "cases": [
-            {
-              "name": "console32",
-              "status": "PASS",
-              "exit_code": 37
-            },
-            {
-              "name": "files32",
-              "status": "PASS",
-              "exit_code": 0
-            },
-            {
-              "name": "tls32",
-              "status": "PASS",
-              "exit_code": 0
-            },
-            {
-              "name": "console64",
-              "status": "PASS",
-              "exit_code": 37
-            },
-            {
-              "name": "files64",
-              "status": "PASS",
-              "exit_code": 0
-            },
-            {
-              "name": "tls64",
-              "status": "PASS",
-              "exit_code": 0
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "job_id": 121110563611,
+      "job_id": 121133998319,
       "name": "compatibility (ubuntu-24.04)",
       "conclusion": "success",
-      "reports": [
-        {
-          "generated_at_utc": "2026-10-25T07:45:27.446167+00:00",
-          "unit_tests": 35,
-          "unit_test_status": "PASS",
-          "sanitizers": [
-            "AddressSanitizer",
-            "UndefinedBehaviorSanitizer"
-          ],
-          "sanitized_unit_tests": 35,
-          "deterministic_mutated_pe_inputs": 120,
-          "sanitized_execution_examples": 4,
-          "deterministic_mutated_tls_execution_inputs": 120,
-          "sanitizer_status": "PASS",
-          "visible_gui_validation": "NOT AUTOMATED: compiled only",
-          "native_windows_cross_validation": "NOT RUN"
-        },
-        {
-          "backend": "leanwin",
-          "cases": [
-            {
-              "name": "console32",
-              "status": "PASS",
-              "exit_code": 37
-            },
-            {
-              "name": "files32",
-              "status": "PASS",
-              "exit_code": 0
-            },
-            {
-              "name": "tls32",
-              "status": "PASS",
-              "exit_code": 0
-            },
-            {
-              "name": "console64",
-              "status": "PASS",
-              "exit_code": 37
-            },
-            {
-              "name": "files64",
-              "status": "PASS",
-              "exit_code": 0
-            },
-            {
-              "name": "tls64",
-              "status": "PASS",
-              "exit_code": 0
-            }
-          ]
-        }
-      ]
+      "unit_tests": 87,
+      "sanitized_unit_tests": 87,
+      "mutated_execution_and_inspection_inputs": 360,
+      "smoke_backend": "leanwin",
+      "smoke_cases": 26,
+      "smoke_status": "PASS"
+    },
+    {
+      "job_id": 121133998419,
+      "name": "windows-native",
+      "conclusion": "success",
+      "smoke_backend": "native-windows",
+      "smoke_cases": 26,
+      "smoke_status": "PASS"
+    },
+    {
+      "job_id": 121133998568,
+      "name": "compatibility (macos-14)",
+      "conclusion": "success",
+      "unit_tests": 87,
+      "sanitized_unit_tests": 87,
+      "mutated_execution_and_inspection_inputs": 360,
+      "smoke_backend": "leanwin",
+      "smoke_cases": 26,
+      "smoke_status": "PASS"
     }
-  ]
+  ],
+  "native_windows_report": "reports/windows-native.json",
+  "note": "This record names the exact tested commit. Later documentation-only commits do not change the tested runtime sources."
 }
