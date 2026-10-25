@@ -1,0 +1,6 @@
+build/
+__pycache__/
+*.pyc
+leanwin-drive/
+examples/bin/
+.DS_Store

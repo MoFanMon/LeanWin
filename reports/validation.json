@@ -1,0 +1,14 @@
+{
+  "generated_at_utc": "2026-10-24T08:17:14.499625+00:00",
+  "unit_tests": 26,
+  "unit_test_status": "PASS",
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "deterministic_mutated_pe_inputs": 120,
+  "sanitized_execution_examples": 4,
+  "sanitizer_status": "PASS",
+  "visible_gui_validation": "NOT AUTOMATED: compiled only",
+  "native_windows_cross_validation": "NOT RUN"
+}
