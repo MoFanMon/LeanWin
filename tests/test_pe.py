@@ -1,5 +1,6 @@
 """Exercise the real executable against independently constructed PE files."""
 import json
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -7,7 +8,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = ROOT / "build" / "leanwin"
+CLI = Path(os.environ.get("LEANWIN_CLI", ROOT / "build/leanwin"))
 
 
 def pe_fixture(bits=64, *, delayed=False, managed=False):

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "examples"))
 from build import Program, console, files
 
-CLI = ROOT / "build" / "leanwin"
+CLI = Path(os.environ.get("LEANWIN_CLI", ROOT / "build/leanwin"))
 
 
 class ExecutionTests(unittest.TestCase):

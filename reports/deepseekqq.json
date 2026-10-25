@@ -206,7 +206,7 @@
       ]
     }
   ],
-  "date": "2026-10-24",
+  "date": "2026-10-25",
   "file": "DeepSeekQQ-Setup.exe",
   "status": "blocked",
   "static_import_entries": 153,
@@ -915,7 +915,10 @@
   ],
   "runtime_attempt": {
     "exit_code": 65,
-    "error": "leanwin: this prototype supports x86/x64 EXEs without TLS or CLR; DLL entry points are not supported"
+    "error": "leanwin: unimplemented import kernel32.dll!GetACP",
+    "stage": "import-binding",
+    "guest_instructions_executed": 0,
+    "installer_tls_validation": "NOT REACHED: imports must bind before TLS is prepared"
   },
   "note": "Only the installer is analyzed. Import-name coverage does not establish instruction or application compatibility."
 }

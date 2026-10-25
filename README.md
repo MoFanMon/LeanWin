@@ -50,12 +50,18 @@ python3 examples/build.py
 |---|---|
 | PE32 / PE32+ 头、区段、普通与延迟导入分析 | 执行阶段在首选映像基址加载；无完整 Windows 加载器环境 |
 | x86、x86-64 整数指令解释执行 | 小范围指令集；无 SSE、AVX、x87、JIT 或异常展开 |
-| x86 stdcall、Windows x64 寄存器和栈参数 | 单线程；无完整 PEB、TEB、TLS 或 SEH |
+| x86 stdcall、Windows x64 寄存器和栈参数 | 单线程；无完整 PEB、TEB 或 SEH |
+| 主线程静态 TLS、模板复制与零填充、启动回调 | 单个 EXE、单个 TLS 槽；不支持线程、DLL TLS 或退出回调 |
 | 控制台和同步文件接口 | 无重叠 I/O、命名管道或设备接口；只支持指定参数子集 |
 | 模块句柄和动态查找已实现接口 | 不加载任意 DLL；不支持按序号解析接口 |
 | `MessageBoxW` 到按需加载的 AppKit 模块 | 仅计划支持 `MB_OK`、空父窗口；实际显示尚未验证 |
 
 执行用客体映像限制为 64 MiB，栈为 1 MiB，最多 64 个已打开文件。
+带 TLS 的映像额外分配 8 KiB 的最小线程记录和槽表，以及最多 1 MiB 的 TLS 数据。
+TLS 回调最多 64 个，按目录顺序在 EXE 入口之前以 `DLL_PROCESS_ATTACH` 调用；回调与入口共用指令预算。
+支持 x86 `FS` / x64 `GS` 对 TLS 槽表的访问；这只是 TEB 的极小子集，不是完整 Windows 线程环境。
+TLS 模板、索引地址和回调表必须在客体映像内，回调目标必须属于可执行区段。
+当前仍按首选基址加载，没有补齐 TLS 地址重定位、动态 TLS API、线程通知或 `DLL_PROCESS_DETACH`。
 文件路径拒绝 `..` 和目录符号链接；零共享模式的冲突检测仅覆盖同一个客体实例。
 客体地址由解释器检查，但这个研究原型没有经过安全审计，不构成完整安全沙箱。
 
@@ -91,16 +97,31 @@ DeepSeekQQ 的实际导入分析与阻断原因见 [reports/deepseekqq.json](rep
 
 ## 本机验证记录
 
-2026-10-24，在 Apple Silicon macOS 上：26 项测试通过，120 个固定种子的变异 PE 输入及
-4 个实际执行示例通过 AddressSanitizer / UndefinedBehaviorSanitizer 检查。
+2026-10-25，在 Apple Silicon macOS 上：35 项测试在普通版和 AddressSanitizer /
+UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子的变异 PE 分析输入、
+120 个变异 TLS 执行输入，以及 4 个实际执行示例。
 可用 `python3 tools/sanitize.py` 重新构建并运行这些检查；结果写入
 [reports/validation.json](reports/validation.json)。
 
-当前核心可执行文件 53,032 字节；可选窗口模块 51,184 字节。
-控制台小示例在 20 次新进程测量中的启动加执行中位数约 2.8–2.9 ms，进程峰值常驻内存中位数约 1.28 MiB。
+当前核心可执行文件约 52 KiB；可选窗口模块约 50 KiB，精确字节数见测量报告。
+控制台小示例在本次 20 次新进程测量中的启动加执行中位数约 2.2 ms，进程峰值常驻内存中位数约 1.3 MiB。
 这些数字仅对应仓库内的微型示例和本机环境，不能外推到一般 Windows 应用。
-DeepSeekQQ 安装器分析到 153 个静态导入项，其中 140 项入口名称尚未实现；执行首先被 TLS 加载环境限制阻断。
+DeepSeekQQ 安装器分析到 153 个静态导入项，其中 140 项入口名称尚未实现；本次执行首先停在
+`kernel32.dll!GetACP` 的导入绑定。绑定成功之前不会执行 TLS 回调，因此尚未验证该安装器的实际 TLS。
 静态导入项数量不等于完整依赖数量，也不是兼容性百分比。
+
+同一组控制台、文件和 TLS 示例可在 LeanWin 与真实 Windows 上运行并检查结果：
+
+```sh
+# macOS / Linux
+python3 tools/smoke.py --runner ./build/leanwin --output reports/smoke.json
+
+# Windows；直接调用 Windows 加载器执行生成的 EXE
+python tools/smoke.py --output reports/windows-native.json
+```
+
+GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 6 项原生执行检查。
+每次运行的真实结果与报告以仓库的 [Actions](https://github.com/MoFanMon/LeanWin/actions) 为准。
 
 ## 结构与下一步
 
@@ -116,7 +137,7 @@ Windows 接口 → POSIX 文件/进程接口
 ```
 
 1. 增加编译器生成的 Win32 测试程序，并在真实 Windows 上交叉验证示例与接口语义。
-2. 补全基础加载环境：PEB/TEB、TLS、重定位、异常、堆与线程同步；避免依赖“总能加载在首选基址”的假设。
+2. 补全基础加载环境：PEB/TEB、TLS 生命周期与动态分配、重定位、异常、堆与线程同步；避免依赖“总能加载在首选基址”的假设。
 3. 扩充整数和 SIMD 指令覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
 4. 实现真实窗口、消息循环和 GDI，再扩展通用控件、注册表、COM 与进程间协作。
 5. 以 DeepSeekQQ / Inno Setup 的导入清单建立回归目标。运行安装器之后，还需要兼容应用本体、QQ 和 NapCat 的完整依赖链。

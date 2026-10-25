@@ -1,0 +1,47 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      CC: clang
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12'
+      - run: python3 tools/sanitize.py
+      - run: python3 tools/smoke.py --runner ./build/leanwin --output reports/smoke.json
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: validation-${{ matrix.os }}
+          path: |
+            reports/validation.json
+            reports/smoke.json
+
+  windows-native:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12'
+      - run: python tools/smoke.py --output reports/windows-native.json
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: windows-native
+          path: reports/windows-native.json

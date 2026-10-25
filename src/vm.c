@@ -21,6 +21,10 @@
 #define STACK_BASE UINT64_C(0x70000000)
 #define API_BASE UINT64_C(0xf0000000)
 #define RETURN_ADDRESS UINT64_C(0xfffffff0)
+#define TLS_BASE UINT64_C(0x71000000)
+#define TLS_FIXED_SIZE 8192U
+#define TLS_MAX_SIZE (1024U * 1024U)
+#define TLS_MAX_CALLBACKS 64U
 #define CF 1U
 #define PF 4U
 #define ZF 64U
@@ -29,7 +33,10 @@
 
 typedef struct {
     const lw_pe *pe;
-    uint8_t *image, *stack;
+    uint8_t *image, *stack, *tls;
+    size_t tls_size;
+    uint64_t tls_callbacks[TLS_MAX_CALLBACKS], segment;
+    unsigned tls_callback_count;
     uint64_t r[16], ip, origin, instructions, calls;
     unsigned flags, word;
     bool failed, done;
@@ -67,6 +74,8 @@ static uint8_t *memory(vm *v, uint64_t address, size_t size)
         size <= v->pe->image_size - (address - v->pe->image_base)) return v->image + (address - v->pe->image_base);
     if (address >= STACK_BASE && address - STACK_BASE <= STACK_SIZE && size <= STACK_SIZE - (address - STACK_BASE))
         return v->stack + (address - STACK_BASE);
+    if (v->tls && address >= TLS_BASE && address - TLS_BASE <= v->tls_size && size <= v->tls_size - (address - TLS_BASE))
+        return v->tls + (address - TLS_BASE);
     fault(v, "unmapped guest address 0x%" PRIx64 " (%zu bytes), IP=0x%" PRIx64, address, size, v->origin);
     return NULL;
 }
@@ -111,10 +120,10 @@ static operand modrm(vm *v, unsigned rex, unsigned *reg)
     return op;
 }
 static uint64_t effective(vm *v, operand op) { return pointer(v, op.address + (op.relative ? v->ip : 0)); }
-static uint64_t get_operand(vm *v, operand op, unsigned bits) { return op.reg ? get_reg(v, op.index, bits) : read_mem(v, effective(v, op), bits / 8); }
+static uint64_t get_operand(vm *v, operand op, unsigned bits) { return op.reg ? get_reg(v, op.index, bits) : read_mem(v, pointer(v, effective(v, op) + v->segment), bits / 8); }
 static void set_operand(vm *v, operand op, uint64_t value, unsigned bits)
 {
-    if (op.reg) set_reg(v, op.index, value, bits); else write_mem(v, effective(v, op), value, bits / 8);
+    if (op.reg) set_reg(v, op.index, value, bits); else write_mem(v, pointer(v, effective(v, op) + v->segment), value, bits / 8);
 }
 static uint64_t alu(vm *v, uint64_t a, uint64_t b, unsigned bits, unsigned kind)
 {
@@ -152,11 +161,16 @@ static bool condition(vm *v, unsigned code)
 static void instruction(vm *v)
 {
     v->origin = v->ip;
+    v->segment = 0;
     unsigned rex = 0, bits = 32, byte = (unsigned)fetch(v, 1), prefixes = 0;
     bool wide16 = false;
-    while (byte == 0x66 || (v->word == 8 && byte >= 0x40 && byte <= 0x4f)) {
+    while (byte == 0x66 || byte == 0x64 || byte == 0x65 || (v->word == 8 && byte >= 0x40 && byte <= 0x4f)) {
         if (++prefixes > 8) { fault(v, "too many instruction prefixes"); return; }
-        if (byte == 0x66) wide16 = true; else rex = byte & 15;
+        if (byte == 0x66) wide16 = true;
+        else if (byte == 0x64 || byte == 0x65) {
+            if ((byte == 0x64) != (v->word == 4)) { fault(v, "unsupported FS/GS segment for this architecture"); return; }
+            v->segment = TLS_BASE;
+        } else rex = byte & 15;
         byte = (unsigned)fetch(v, 1);
     }
     bits = (rex & 8) ? 64 : wide16 ? 16 : 32;
@@ -174,6 +188,11 @@ static void instruction(vm *v)
     }
     switch (byte) {
     case 0x90: return;
+    case 0xa1: {
+        uint64_t address = pointer(v, fetch(v, v->word) + v->segment);
+        set_reg(v, 0, read_mem(v, address, bits / 8), bits);
+        return;
+    }
     case 0x68: { int64_t x = (int32_t)fetch(v, 4); push(v, (uint64_t)x); return; }
     case 0x6a: { int64_t x = (int8_t)fetch(v, 1); push(v, (uint64_t)x); return; }
     case 0xc3: v->ip = pop(v); return;
@@ -476,6 +495,92 @@ static void call_api(vm *v, int index)
     if (v->word == 4) v->r[4] = pointer(v, v->r[4] + apis[index].argc * 4);
 }
 
+static bool image_span(vm *v, uint64_t address, uint64_t size)
+{
+    return address >= v->pe->image_base && address - v->pe->image_base <= v->pe->image_size &&
+        size <= v->pe->image_size - (address - v->pe->image_base);
+}
+static bool executable_address(vm *v, uint64_t address)
+{
+    if (!image_span(v, address, 1)) return false;
+    uint64_t rva = address - v->pe->image_base;
+    for (unsigned i = 0; i < v->pe->section_count; i++) {
+        const lw_section *s = &v->pe->sections[i];
+        uint32_t size = s->virtual_size > s->raw_size ? s->virtual_size : s->raw_size;
+        if ((s->flags & 0x20000000U) && rva >= s->rva && rva - s->rva < size) return true;
+    }
+    return false;
+}
+static void prepare_tls(vm *v)
+{
+    uint32_t rva = v->pe->directories[9][0], size = v->pe->directories[9][1];
+    if (!rva && !size) return;
+    unsigned header_size = v->word * 4 + 8;
+    uint64_t directory = v->pe->image_base + rva;
+    if (!rva || size < header_size || !image_span(v, directory, size)) {
+        fault(v, "invalid TLS directory"); return;
+    }
+    uint64_t start = read_mem(v, directory, v->word), end = read_mem(v, directory + v->word, v->word);
+    uint64_t index = read_mem(v, directory + v->word * 2, v->word);
+    uint64_t callbacks = read_mem(v, directory + v->word * 3, v->word);
+    uint64_t zero_fill = read_mem(v, directory + v->word * 4, 4);
+    uint32_t characteristics = (uint32_t)read_mem(v, directory + v->word * 4 + 4, 4);
+    if (end < start || ((start || end) && !image_span(v, start, end - start)) || !image_span(v, index, 4)) {
+        fault(v, "invalid TLS template or index address"); return;
+    }
+    uint64_t initialized = end - start;
+    if (initialized > TLS_MAX_SIZE || zero_fill > TLS_MAX_SIZE - initialized) {
+        fault(v, "TLS data exceeds the 1 MiB prototype limit"); return;
+    }
+    if ((characteristics & ~0x00f00000U) || ((characteristics >> 20) & 15) == 15) {
+        fault(v, "unsupported TLS characteristics or alignment"); return;
+    }
+    /* Validate and snapshot the whole callback table before executing any code. */
+    if (callbacks) {
+        for (unsigned i = 0; ; i++) {
+            if (!image_span(v, callbacks, v->word)) { fault(v, "invalid TLS callback table address"); return; }
+            uint64_t target = read_mem(v, callbacks, v->word);
+            if (!target) break;
+            if (i == TLS_MAX_CALLBACKS) { fault(v, "TLS callback list exceeds the 64 callback limit"); return; }
+            if (!executable_address(v, target)) { fault(v, "TLS callback is outside executable image sections"); return; }
+            v->tls_callbacks[v->tls_callback_count++] = target;
+            callbacks += v->word;
+        }
+    }
+    /* One image, one main thread, one static TLS slot. The block base is 8 KiB
+       aligned in guest address space, covering every PE TLS alignment value. */
+    v->tls_size = TLS_FIXED_SIZE + (size_t)(initialized + zero_fill);
+    v->tls = calloc(1, v->tls_size);
+    if (!v->tls) { fault(v, "cannot allocate TLS memory"); return; }
+    if (initialized) memcpy(v->tls + TLS_FIXED_SIZE, v->image + (start - v->pe->image_base), (size_t)initialized);
+    write_mem(v, TLS_BASE + (v->word == 8 ? 0x30 : 0x18), TLS_BASE, v->word);
+    write_mem(v, TLS_BASE + (v->word == 8 ? 0x58 : 0x2c), TLS_BASE + 4096, v->word);
+    write_mem(v, TLS_BASE + 4096, TLS_BASE + TLS_FIXED_SIZE, v->word);
+    write_mem(v, index, 0, 4);
+}
+static void execute(vm *v, uint64_t budget)
+{
+    while (!v->failed && !v->done && v->ip != RETURN_ADDRESS) {
+        if (v->instructions >= budget) { fault(v, "instruction budget exhausted at guest IP 0x%" PRIx64, v->ip); break; }
+        if (v->ip > API_BASE && v->ip <= API_BASE + API_COUNT * 16 && (v->ip - API_BASE) % 16 == 0)
+            call_api(v, (int)((v->ip - API_BASE) / 16) - 1);
+        else { v->instructions++; instruction(v); }
+    }
+}
+static void enter(vm *v, uint64_t address, bool callback)
+{
+    memset(v->r, 0, sizeof(v->r)); v->flags = 0;
+    v->ip = address;
+    v->r[4] = STACK_BASE + STACK_SIZE - 0x100;
+    if (v->word == 8) {
+        v->r[4] -= 32; /* Windows x64 shadow space; callee RSP is 8 mod 16. */
+        if (callback) { v->r[1] = v->pe->image_base; v->r[2] = 1; }
+    } else if (callback) {
+        push(v, 0); push(v, 1); push(v, v->pe->image_base);
+    }
+    push(v, RETURN_ADDRESS);
+}
+
 int lw_run(const lw_pe *pe, const char *root, uint64_t budget, lw_result *out, char *e, size_t en)
 {
     memset(out, 0, sizeof(*out));
@@ -483,12 +588,13 @@ int lw_run(const lw_pe *pe, const char *root, uint64_t budget, lw_result *out, c
     struct timespec start, end; clock_gettime(CLOCK_MONOTONIC, &start);
     for (unsigned i = 0; i < 64; i++) v.files[i] = -1;
     if ((pe->machine != 0x8664 && pe->machine != 0x14c) || (pe->characteristics & 0x2000) ||
-        pe->directories[9][0] || pe->directories[14][0]) {
-        fault(&v, "this prototype supports x86/x64 EXEs without TLS or CLR; DLL entry points are not supported"); goto cleanup;
+        pe->directories[14][0]) {
+        fault(&v, "this prototype supports x86/x64 EXEs without CLR; DLL entry points are not supported"); goto cleanup;
     }
     if (pe->image_size > 64 * 1024 * 1024 || pe->image_base > UINT64_MAX - pe->image_size ||
         pe->image_base + pe->image_size > mask(pe->bits) ||
         (pe->image_base < STACK_BASE + STACK_SIZE && pe->image_base + pe->image_size > STACK_BASE) ||
+        (pe->image_base < TLS_BASE + TLS_FIXED_SIZE + TLS_MAX_SIZE && pe->image_base + pe->image_size > TLS_BASE) ||
         (pe->image_base < RETURN_ADDRESS + 16 && pe->image_base + pe->image_size > API_BASE)) {
         fault(&v, "guest image size or address conflicts with prototype limits"); goto cleanup;
     }
@@ -497,27 +603,28 @@ int lw_run(const lw_pe *pe, const char *root, uint64_t budget, lw_result *out, c
     memcpy(v.image, pe->data, pe->headers_size);
     for (unsigned i = 0; i < pe->section_count; i++) memcpy(v.image + pe->sections[i].rva, pe->data + pe->sections[i].raw, pe->sections[i].raw_size);
     if (lw_pe_imports(pe, bind_import, &v, e, en)) { v.failed = true; goto cleanup; }
+    prepare_tls(&v);
+    if (v.failed) goto cleanup;
     if (mkdir(root, 0700) && errno != EEXIST) { fault(&v, "cannot create guest drive: %s", strerror(errno)); goto cleanup; }
     v.root = open(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (v.root < 0) { fault(&v, "cannot open guest drive: %s", strerror(errno)); goto cleanup; }
-    v.ip = pe->image_base + pe->entry;
-    v.r[4] = STACK_BASE + STACK_SIZE - 0x100;
-    push(&v, RETURN_ADDRESS);
-    while (!v.failed && !v.done) {
-        if (v.ip == RETURN_ADDRESS) { v.exit_code = (uint32_t)v.r[0]; v.done = true; break; }
-        if (v.instructions >= budget) { fault(&v, "instruction budget exhausted at guest IP 0x%" PRIx64, v.ip); break; }
-        if (v.ip > API_BASE && v.ip <= API_BASE + API_COUNT * 16 && (v.ip - API_BASE) % 16 == 0)
-            call_api(&v, (int)((v.ip - API_BASE) / 16) - 1);
-        else { v.instructions++; instruction(&v); }
+    for (unsigned i = 0; i < v.tls_callback_count && !v.failed && !v.done; i++) {
+        enter(&v, v.tls_callbacks[i], true);
+        execute(&v, budget);
+    }
+    if (!v.failed && !v.done) {
+        enter(&v, pe->image_base + pe->entry, false);
+        execute(&v, budget);
+        if (!v.failed && !v.done) { v.exit_code = (uint32_t)v.r[0]; v.done = true; }
     }
 cleanup:
     for (unsigned i = 0; i < 64; i++) if (v.files[i] >= 0) close(v.files[i]);
     if (v.root >= 0) close(v.root);
-    free(v.image); free(v.stack);
+    free(v.image); free(v.stack); free(v.tls);
     clock_gettime(CLOCK_MONOTONIC, &end);
     out->guest_exit_code = v.exit_code; out->instructions = v.instructions; out->api_calls = v.calls;
     out->elapsed_ms = (double)(end.tv_sec - start.tv_sec) * 1000 + (double)(end.tv_nsec - start.tv_nsec) / 1000000;
-    out->guest_memory_bytes = (size_t)pe->image_size + STACK_SIZE;
+    out->guest_memory_bytes = (size_t)pe->image_size + STACK_SIZE + v.tls_size;
     struct rusage usage;
     if (!getrusage(RUSAGE_SELF, &usage)) {
 #ifdef __APPLE__

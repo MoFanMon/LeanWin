@@ -1,13 +1,15 @@
 {
-  "generated_at_utc": "2026-10-24T08:17:14.499625+00:00",
-  "unit_tests": 26,
+  "generated_at_utc": "2026-10-25T07:42:06.724277+00:00",
+  "unit_tests": 35,
   "unit_test_status": "PASS",
   "sanitizers": [
     "AddressSanitizer",
     "UndefinedBehaviorSanitizer"
   ],
+  "sanitized_unit_tests": 35,
   "deterministic_mutated_pe_inputs": 120,
   "sanitized_execution_examples": 4,
+  "deterministic_mutated_tls_execution_inputs": 120,
   "sanitizer_status": "PASS",
   "visible_gui_validation": "NOT AUTOMATED: compiled only",
   "native_windows_cross_validation": "NOT RUN"

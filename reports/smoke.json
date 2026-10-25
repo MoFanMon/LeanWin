@@ -1,0 +1,35 @@
+{
+  "backend": "leanwin",
+  "cases": [
+    {
+      "name": "console32",
+      "status": "PASS",
+      "exit_code": 37
+    },
+    {
+      "name": "files32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "tls32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "console64",
+      "status": "PASS",
+      "exit_code": 37
+    },
+    {
+      "name": "files64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "tls64",
+      "status": "PASS",
+      "exit_code": 0
+    }
+  ]
+}
