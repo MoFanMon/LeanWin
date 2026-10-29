@@ -112,6 +112,26 @@
       "exit_code": 0
     },
     {
+      "name": "x87-control32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "x87-thread32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "x87-env32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "x87-env1632",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
       "name": "console64",
       "status": "PASS",
       "exit_code": 37
@@ -218,6 +238,26 @@
     },
     {
       "name": "system-info64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "x87-control64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "x87-thread64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "x87-env64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "x87-env1664",
       "status": "PASS",
       "exit_code": 0
     }

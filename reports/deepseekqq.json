@@ -46,5 +46,6 @@
   "previous_deferred_instruction_count": 11949,
   "visible_installer_window": false,
   "installation_completed": false,
-  "note": "Startup passed x87 initialization and control-word setup. No complete x87 arithmetic, common controls, installer GUI or installation compatibility is claimed."
+  "note": "Startup passed x87 initialization and control-word setup. No complete x87 arithmetic, common controls, installer GUI or installation compatibility is claimed.",
+  "tested_runtime_commit": "1fc36a46c2ed76b5901baf8de66c0372f0e32fbd"
 }

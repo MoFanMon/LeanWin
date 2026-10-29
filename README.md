@@ -198,7 +198,7 @@ UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子
 可用 `python3 tools/sanitize.py` 重新构建并运行这些检查；结果写入
 [reports/validation.json](reports/validation.json)。
 
-当前核心可执行文件约 103 KiB；可选窗口模块约 50 KiB，精确字节数见测量报告。
+当前核心可执行文件约 104 KiB；可选窗口模块约 50 KiB，精确字节数见测量报告。
 控制台小示例的新进程启动与执行测量见报告中的各架构中位数；不以单次数字代替真实软件性能。
 这些数字仅对应仓库内的微型示例和本机环境，不能外推到一般 Windows 应用。
 DeepSeekQQ 安装器分析到 153 个静态导入项，其中 78 项入口名称尚未实现；严格模式首先停在
@@ -220,8 +220,8 @@ python tools/smoke.py --output reports/windows-native.json
 
 GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 52 项原生执行检查。
 新增 x87 控制状态、线程隔离和两种环境格式的 8 项对照用例。
-2026-10-29 的[区域设置接口跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40876368704)全部通过，
-准确的测试提交、任务与计数记录在 [reports/ci.json](reports/ci.json)，44 项 Windows 结果见
+2026-10-29 的[x87 控制状态跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40880700187)全部通过，
+准确的测试提交、任务与计数记录在 [reports/ci.json](reports/ci.json)，52 项 Windows 结果见
 [reports/windows-native.json](reports/windows-native.json)。本机 `validation.json` 仅记录本机检查，Windows 结果由独立 CI 任务提供。
 每次运行的真实结果与报告以仓库的 [Actions](https://github.com/MoFanMon/LeanWin/actions) 为准。
 
