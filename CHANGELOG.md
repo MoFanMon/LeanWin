@@ -1,5 +1,13 @@
 # 更新记录
 
+## 2026-10-29
+
+- 实现安装器使用的 MOVD/MOVQ、MOVUPS、MOVAPS、PSHUFD，保留完整 XMM 数据和线程隔离；检查完整内存范围、页保护和对齐，未宣称完整 SSE2 支持。
+- 增加 VerSetConditionMask、VerifyVersionInfoW、GetVersion、GetVersionExW，接口入口共 69 个；明确固定客体版本配置与比较限制，并处理 x86 的 64 位参数和返回值。
+- 补充实际启动路径需要的 ADC、SBB、无符号 DIV，以及除零/商溢出诊断。
+- 普通版和 ASan/UBSan 版各通过 104 项测试；保留 360 个 PE/TLS/资源变异输入。Windows 对照用例扩展为 34 项。
+- 重新测试 DeepSeekQQ：诊断模式从 619 条推进到 11,878 条指令、9 次接口调用，当前缺少 SetThreadLocale；尚未出现安装界面或完成安装。静态缺失导入由 92 项降至 88 项。
+
 ## 2026-10-25
 
 ### 内存、资源、进程和线程

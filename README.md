@@ -4,7 +4,7 @@
 MIT 许可。执行核心使用 C11，窗口后端使用 Objective-C/AppKit，编译工具为系统 Clang 和 Make。
 
 当前原型已经执行专门构建的 32 位、64 位 Windows PE 示例，完成控制台输出和文件读写。
-项目包含独立实现的 PE 解析与加载、x86 指令解释器、Windows 调用约定和 65 个接口入口。
+项目包含独立实现的 PE 解析与加载、x86 指令解释器、Windows 调用约定和 69 个接口入口。
 Wine、CrossOver、Rosetta、Windows 虚拟机均不属于当前执行链。
 
 **这是很小的接口子集验证版。当前不能运行 DeepSeekQQ 安装器，也不能运行一般的 Python、Qt、Electron、.NET 桌面软件。**
@@ -53,7 +53,7 @@ python3 examples/build.py
 | 已实现部分 | 当前限制 |
 |---|---|
 | PE32 / PE32+ 头、区段、普通与延迟导入分析 | 执行阶段在首选映像基址加载；无完整 Windows 加载器环境 |
-| x86、x86-64 整数指令解释执行 | 小范围指令集；无 SSE、AVX、x87、JIT 或异常展开 |
+| x86、x86-64 整数指令、SSE 数据搬运子集 | 无 SIMD 浮点算术、AVX、x87、JIT 或异常展开 |
 | x86 stdcall、Windows x64 寄存器和栈参数 | 无完整 PEB、TEB 或 SEH |
 | 静态与动态 TLS、模板复制、启动与线程通知 | 单个 EXE 的静态槽；无 DLL TLS、重定位或进程退出通知 |
 | VirtualAlloc / Free / Protect / Query、进程堆与私有堆 | 受限页保护与分配标志；无映射文件、堆重分配或大页 |
@@ -101,6 +101,12 @@ TLS 模板、索引地址和回调表必须在客体映像内，回调目标必�
 进程与环境接口：`GetCurrentProcess`, `GetExitCodeProcess`, `CreateProcessW`, `GetCommandLineW`,
 `GetModuleFileNameW`, `GetStartupInfoW`, `QueryPerformanceFrequency`, `QueryPerformanceCounter`。
 
+版本接口：`VerSetConditionMask`, `VerifyVersionInfoW`, `GetVersion`, `GetVersionExW`。
+当前版本配置固定为 Windows 10.0.19045、workstation，独立于 macOS/Linux 主机；这不是系统功能完整性的声明。
+`GetVersionExW` 支持 276 / 284 字节结构，`VerifyVersionInfoW` 支持 major、minor 和 service-pack
+组成的分层版本比较；选中字段须使用相同关系运算符。不支持的字段或混合运算符返回错误 50，条件非法返回 87，
+版本不满足返回 1150。暂不模拟应用 manifest 导致的版本返回差异。
+
 线程与同步接口：`GetCurrentThread`, `GetCurrentThreadId`, `CreateThread`, `ExitThread`, `GetExitCodeThread`,
 `ResumeThread`, `SuspendThread`, `WaitForSingleObject`, `CreateEventW`, `SetEvent`, `ResetEvent`, `Sleep`,
 `SwitchToThread`, `TlsAlloc`, `TlsFree`, `TlsGetValue`, `TlsSetValue`, `InitializeCriticalSection`,
@@ -112,6 +118,14 @@ TLS 模板、索引地址和回调表必须在客体映像内，回调目标必�
 `CreateFileW` 仅支持普通文件、读/写通用访问、零共享、空安全属性/模板和普通文件属性。
 读取自身 EXE 还支持 `FILE_SHARE_READ`。`LocalAlloc` 仅支持固定块及零初始化。
 未实现的导入、指令和受限参数均应按当前实现返回明确错误，不伪造完整兼容性。
+
+### SIMD 数据搬运
+
+支持 legacy `MOVD` / `MOVQ`（通用寄存器与 XMM 间）、`MOVUPS`、`MOVAPS` 和 `PSHUFD`。
+每个客体线程独立保存 XMM 状态；内存操作检查完整 16 字节范围和页保护，`MOVAPS` / legacy `PSHUFD`
+检查 16 字节对齐。支持 x64 扩展寄存器及 RIP 相对寻址；不支持的 scalar、MMX、VEX 编码明确失败。
+当前仅覆盖少量搬运和重排指令，CPUID 不声明完整 SSE/SSE2 支持。整数路径补充了 ADC、SBB 和无符号 DIV；
+除零和商溢出停止客体并报告错误，尚未通过 Windows SEH 分发异常。
 
 ### 字符编码配置
 
@@ -148,7 +162,7 @@ DeepSeekQQ 的实际导入分析与阻断原因见 [reports/deepseekqq.json](rep
 
 ## 本机验证记录
 
-2026-10-25，在 Apple Silicon macOS 上：87 项测试在普通版和 AddressSanitizer /
+2026-10-29，在 Apple Silicon macOS 上：104 项测试在普通版和 AddressSanitizer /
 UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子的变异 PE 分析输入、
 120 个变异 TLS 执行输入、120 个变异资源目录执行输入，以及 4 个实际执行示例。
 可用 `python3 tools/sanitize.py` 重新构建并运行这些检查；结果写入
@@ -157,9 +171,10 @@ UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子
 当前核心可执行文件约 103 KiB；可选窗口模块约 50 KiB，精确字节数见测量报告。
 控制台小示例的新进程启动与执行测量见报告中的各架构中位数；不以单次数字代替真实软件性能。
 这些数字仅对应仓库内的微型示例和本机环境，不能外推到一般 Windows 应用。
-DeepSeekQQ 安装器分析到 153 个静态导入项，其中 92 项入口名称尚未实现；严格模式首先停在
-`kernel32.dll!GetFullPathNameW`。诊断模式执行了 619 条指令、3 次接口调用，停在 `0x405bf3` 的
-SSE2 `MOVD XMM0, ECX`，尚未进入安装界面，也未验证安装器 TLS 生命周期完成。
+DeepSeekQQ 安装器分析到 153 个静态导入项，其中 88 项入口名称尚未实现；严格模式首先停在
+`kernel32.dll!GetFullPathNameW`。诊断模式执行了 11,878 条指令、9 次接口调用，停在
+`kernel32.dll!SetThreadLocale`（调用位置 `0x403870`）。上次的 SSE2 搬运阻断已越过；
+尚未进入安装界面，也未验证安装器 TLS 生命周期完成。
 完整缺失清单见 [reports/deepseekqq-imports.json](reports/deepseekqq-imports.json)。
 静态导入项数量不等于完整依赖数量，也不是兼容性百分比。
 
@@ -173,7 +188,8 @@ python3 tools/smoke.py --runner ./build/leanwin --output reports/smoke.json
 python tools/smoke.py --output reports/windows-native.json
 ```
 
-GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 26 项原生执行检查。
+GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 34 项原生执行检查。
+新增 SSE 搬运、对齐访问、版本条件与版本查询的 8 项对照用例。
 2026-10-25 的[内存、资源、线程与进程跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40181721510)全部通过，
 准确的测试提交、任务与计数记录在 [reports/ci.json](reports/ci.json)，26 项 Windows 结果见
 [reports/windows-native.json](reports/windows-native.json)。本机 `validation.json` 仅记录本机检查，Windows 结果由独立 CI 任务提供。
@@ -194,7 +210,7 @@ Windows 接口 → POSIX 文件/进程接口
 
 1. 增加编译器生成的 Win32 测试程序，并扩展真实 Windows 上的接口语义与界面验证。
 2. 补全加载环境：PEB/TEB、进程退出通知、DLL TLS、重定位和异常；扩展现有堆与线程调度的参数语义。
-3. 优先实现安装器启动所需的 SSE2 数据搬运，再扩充指令覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
+3. 继续补齐安装器执行路径所需的区域设置与指令，再扩充 SIMD 覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
 4. 实现真实窗口、消息循环和 GDI，再扩展通用控件、注册表、COM 与进程间协作。
 5. 以 DeepSeekQQ / Inno Setup 的导入清单建立回归目标。运行安装器之后，还需要兼容应用本体、QQ 和 NapCat 的完整依赖链。
 
@@ -205,6 +221,8 @@ Windows 接口 → POSIX 文件/进程接口
 
 - [Microsoft PE/COFF 格式](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format)
 - [Windows x64 调用约定](https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention)
+- [Intel 指令参考手册](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
+- [VerifyVersionInfoW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-verifyversioninfow)
 - [CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
 - [VirtualAlloc](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc)
 - [CreateProcessW](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw)

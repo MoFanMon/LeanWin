@@ -4,8 +4,8 @@
   "format": "PE32",
   "architecture": "x86",
   "static_import_entries": 153,
-  "supported_import_entries": 61,
-  "missing_import_entries": 92,
+  "supported_import_entries": 65,
+  "missing_import_entries": 88,
   "supported_imports": [
     {
       "dll": "kernel32.dll",
@@ -134,6 +134,11 @@
     },
     {
       "dll": "kernel32.dll",
+      "symbol": "GetVersion",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
       "symbol": "SwitchToThread",
       "delayed": false
     },
@@ -229,7 +234,22 @@
     },
     {
       "dll": "kernel32.dll",
+      "symbol": "GetVersionExW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "VerifyVersionInfoW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
       "symbol": "HeapCreate",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "VerSetConditionMask",
       "delayed": false
     },
     {
@@ -356,11 +376,6 @@
     },
     {
       "dll": "kernel32.dll",
-      "symbol": "GetVersion",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
       "symbol": "GetDriveTypeW",
       "delayed": false
     },
@@ -426,22 +441,7 @@
     },
     {
       "dll": "kernel32.dll",
-      "symbol": "GetVersionExW",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "symbol": "VerifyVersionInfoW",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
       "symbol": "LCMapStringW",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "symbol": "VerSetConditionMask",
       "delayed": false
     },
     {

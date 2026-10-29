@@ -17,6 +17,8 @@ from kernel_fixture import Probe, heap_probe, virtual_probe
 from test_resources import resource_probe
 from test_threads import thread_probe, event_probe, thread_tls_probe
 from test_process import process_probe, context_probe
+from test_simd import simd_probe, aligned_simd_probe
+from test_version import condition_probe, version_probe
 
 
 def tls_probe(bits):
@@ -77,7 +79,11 @@ def main():
                      ("event", event_probe(bits), 0, b""),
                      ("thread-tls", thread_tls_probe(bits), 0, b""),
                      ("process", process_probe(bits), 0, b""),
-                     ("context", context_probe(bits), 0, b"")]
+                     ("context", context_probe(bits), 0, b""),
+                     ("simd", simd_probe(bits), 0, b""),
+                     ("aligned-simd", aligned_simd_probe(bits), 0, b""),
+                     ("version-condition", condition_probe(bits), 0, b""),
+                     ("version-query", version_probe(bits), 0, b"")]
             for name, program, expected_exit, expected_stdout in cases:
                 folder = Path(directory) / f"{name}{bits}"
                 folder.mkdir()

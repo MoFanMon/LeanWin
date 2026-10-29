@@ -1,12 +1,12 @@
 {
-  "generated_at_utc": "2026-10-25T09:40:34.467395+00:00",
-  "unit_tests": 87,
+  "generated_at_utc": "2026-10-29T11:48:09.063646+00:00",
+  "unit_tests": 104,
   "unit_test_status": "PASS",
   "sanitizers": [
     "AddressSanitizer",
     "UndefinedBehaviorSanitizer"
   ],
-  "sanitized_unit_tests": 87,
+  "sanitized_unit_tests": 104,
   "deterministic_mutated_pe_inputs": 120,
   "sanitized_execution_examples": 4,
   "deterministic_mutated_tls_execution_inputs": 120,

@@ -16,6 +16,38 @@ class StartupInstructionTests(unittest.TestCase):
             exe = Path(folder)/"cpu.exe"; exe.write_bytes(p.image())
             return subprocess.run([str(CLI), "run", str(exe), "--root", str(Path(folder)/"drive")], capture_output=True, timeout=5)
 
+    def test_adc_and_sbb_consume_carry_and_produce_overflow_and_borrow(self):
+        for bits in (32,64):
+            p=Probe([],bits)
+            p.mov(0,0); p.emit(b"\x83\xf8\x01\x1b\xc0"); p.equal(0xffffffff)
+            p.mov(0,0x7fffffff); p.mov(3,0)
+            p.emit(b"\x83\xfb\x01\x13\xc3"); p.require(b"",0x81); p.equal(0x80000000)
+            p.mov(0,0xffffffff); p.mov(3,0)
+            p.emit(b"\x83\xfb\x01\x83\xd0\0"); p.require(b"",0x83); p.equal(0)
+            p.mov(0,0x80000000); p.mov(3,0x7fffffff)
+            p.mov(1,0); p.emit(b"\x83\xf9\x01\x1b\xc3"); p.require(b"",0x81); p.equal(0)
+            p.finish()
+            with self.subTest(bits=bits):
+                r=self.run_probe(p); self.assertEqual(r.returncode,0,r.stderr)
+
+    def test_unsigned_division_uses_the_double_width_dividend(self):
+        for bits in (32,64):
+            p=Probe([],bits); p.mov(0,10); p.mov(2,1); p.mov(3,3)
+            p.emit(b"\xf7\xf3"); p.equal(1431655768); p.copy(0,2); p.equal(2)
+            if bits==64:
+                p.mov(0,0); p.mov(2,1); p.mov(3,3); p.emit(b"\x48\xf7\xf3")
+                p.mov(3,0x5555555555555555); p.require(b"\x48\x39\xd8")
+                p.copy(0,2); p.equal(1)
+            p.finish()
+            with self.subTest(bits=bits):
+                r=self.run_probe(p); self.assertEqual(r.returncode,0,r.stderr)
+
+    def test_division_by_zero_and_quotient_overflow_stop_the_guest(self):
+        for high,divisor in [(0,0),(3,3)]:
+            p=Probe([]); p.mov(0,10); p.mov(2,high); p.mov(3,divisor); p.emit(b"\xf7\xf3"); p.exit(0)
+            with self.subTest(high=high,divisor=divisor):
+                r=self.run_probe(p); self.assertEqual(r.returncode,65); self.assertIn(b"divide",r.stderr)
+
     def test_push_pop_flags_preserve_id_and_direction_across_arithmetic(self):
         for bits in (32, 64):
             p = Probe([], bits)

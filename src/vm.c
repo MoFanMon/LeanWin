@@ -4,6 +4,7 @@
 #include "memory.h"
 #include "resource.h"
 #include "process.h"
+#include "version.h"
 #include <ctype.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -48,6 +49,7 @@ enum { THREAD_ATTACH, THREAD_BODY, THREAD_DETACH, THREAD_ENDED };
 enum { READY, WAIT_OBJECT, SLEEPING, WAIT_CRITICAL };
 typedef struct {
     uint64_t r[16], ip, start, parameter, deadline, wait_handle;
+    uint8_t xmm[16][16];
     unsigned flags, last_error, id, suspend, phase, callback, state;
     uint32_t exit_code;
     uint8_t *stack, *tls;
@@ -104,7 +106,8 @@ enum { EXIT_PROCESS, GET_STD_HANDLE, WRITE_FILE, READ_FILE, CREATE_FILE, CLOSE_H
        TLS_ALLOC, TLS_FREE, TLS_GET, TLS_SET,
        CRITICAL_INIT, CRITICAL_ENTER, CRITICAL_LEAVE, CRITICAL_DELETE,
        CREATE_PROCESS, GET_COMMAND_LINE, GET_MODULE_FILENAME, GET_STARTUP_INFO,
-       PERFORMANCE_FREQUENCY, PERFORMANCE_COUNTER, API_COUNT };
+       PERFORMANCE_FREQUENCY, PERFORMANCE_COUNTER, VERSION_CONDITION, VERIFY_VERSION,
+       GET_VERSION, GET_VERSION_EX, API_COUNT };
 static const api apis[] = {
     {"ExitProcess",1,false}, {"GetStdHandle",1,false}, {"WriteFile",5,false},
     {"ReadFile",5,false}, {"CreateFileW",7,false}, {"CloseHandle",1,false},
@@ -128,7 +131,8 @@ static const api apis[] = {
     {"InitializeCriticalSection",1,false}, {"EnterCriticalSection",1,false},
     {"LeaveCriticalSection",1,false}, {"DeleteCriticalSection",1,false},
     {"CreateProcessW",10,false}, {"GetCommandLineW",0,false}, {"GetModuleFileNameW",3,false},
-    {"GetStartupInfoW",1,false}, {"QueryPerformanceFrequency",1,false}, {"QueryPerformanceCounter",1,false}
+    {"GetStartupInfoW",1,false}, {"QueryPerformanceFrequency",1,false}, {"QueryPerformanceCounter",1,false},
+    {"VerSetConditionMask",3,false}, {"VerifyVersionInfoW",3,false}, {"GetVersion",0,false}, {"GetVersionExW",1,false}
 };
 static uint64_t create_thread(vm *, uint64_t *);
 static bool executable_address(vm *, uint64_t);
@@ -218,22 +222,23 @@ static void set_operand(vm *v, operand op, uint64_t value, unsigned bits)
 static uint64_t alu(vm *v, uint64_t a, uint64_t b, unsigned bits, unsigned kind)
 {
     uint64_t m = mask(bits), sign = UINT64_C(1) << (bits - 1), result;
+    unsigned carry = (kind==2 || kind==3) && (v->flags & CF) ? 1U : 0U;
     a &= m; b &= m;
-    switch (kind) { case 0: result = a + b; break; case 1: result = a | b; break;
-        case 4: result = a & b; break; case 5: case 7: result = a - b; break;
+    switch (kind) { case 0: case 2: result = a + b + carry; break; case 1: result = a | b; break;
+        case 4: result = a & b; break; case 3: case 5: case 7: result = a - b - carry; break;
         case 6: result = a ^ b; break; default: fault(v, "unsupported arithmetic operation"); return 0; }
     result &= m; v->flags &= ~ARITHMETIC_FLAGS;
     if (!result) v->flags |= ZF;
     if (result & sign) v->flags |= SF;
     unsigned parity = (unsigned)result & 255; parity ^= parity >> 4; parity &= 15;
     if ((0x9669U >> parity) & 1) v->flags |= PF;
-    if (kind == 0) {
+    if (kind == 0 || kind == 2) {
         if ((a ^ b ^ result) & 16) v->flags |= AF;
-        if (result < a) v->flags |= CF;
+        if (result < a || (carry && result==a)) v->flags |= CF;
         if ((~(a ^ b) & (a ^ result)) & sign) v->flags |= OF;
-    } else if (kind == 5 || kind == 7) {
+    } else if (kind == 3 || kind == 5 || kind == 7) {
         if ((a ^ b ^ result) & 16) v->flags |= AF;
-        if (a < b) v->flags |= CF;
+        if (a < b || (carry && a==b)) v->flags |= CF;
         if (((a ^ b) & (a ^ result)) & sign) v->flags |= OF;
     }
     return result;
@@ -261,6 +266,54 @@ static uint64_t multiply(vm *v, uint64_t a, uint64_t b, unsigned bits)
     return (a*b)&m;
 }
 
+/* Legacy SSE data movement only. Each thread owns its XMM bytes; there is no
+   host SIMD state, floating-point arithmetic, or CPUID feature promotion. */
+static bool simd_instruction(vm *v, unsigned opcode, unsigned rex, bool prefix66, bool prefixf3)
+{
+    if (prefix66 && prefixf3) return false;
+    bool scalar = prefix66 && (opcode == 0x6e || opcode == 0x7e);
+    bool shuffle = prefix66 && opcode == 0x70;
+    bool packed = !prefix66 && !prefixf3 && (opcode == 0x10 || opcode == 0x11 || opcode == 0x28 || opcode == 0x29);
+    if (!scalar && !shuffle && !packed) return false;
+    unsigned reg; operand op = modrm(v, rex, &reg);
+    if (v->failed) return true;
+    uint8_t (*xmm)[16] = v->threads[v->current].xmm;
+    if (scalar) {
+        unsigned bits = (rex & 8) ? 64 : 32;
+        if (opcode == 0x6e) {
+            uint64_t value = get_operand(v, op, bits);
+            if (!v->failed) {
+                memset(xmm[reg], 0, 16);
+                for (unsigned i = 0; i < bits/8; i++) xmm[reg][i] = (uint8_t)(value >> (i*8));
+            }
+        } else {
+            uint64_t value = 0;
+            for (unsigned i = 0; i < bits/8; i++) value |= (uint64_t)xmm[reg][i] << (i*8);
+            set_operand(v, op, value, bits);
+        }
+        return true;
+    }
+    unsigned control = shuffle ? (unsigned)fetch(v, 1) : 0;
+    bool store = packed && (opcode == 0x11 || opcode == 0x29);
+    uint8_t *data;
+    if (op.reg) data = xmm[op.index];
+    else {
+        uint64_t address = pointer(v, effective(v, op)+v->segment);
+        if ((shuffle || opcode == 0x28 || opcode == 0x29) && (address & 15)) {
+            fault(v, "unaligned SIMD operand at 0x%" PRIx64 ", IP=0x%" PRIx64, address, v->origin); return true;
+        }
+        data = access_memory(v, address, 16, store ? LW_WRITE : LW_READ);
+    }
+    if (!data || v->failed) return true;
+    if (shuffle) {
+        uint8_t result[16];
+        for (unsigned i = 0; i < 4; i++) memcpy(result+i*4, data+((control >> (i*2)) & 3)*4, 4);
+        memcpy(xmm[reg], result, 16);
+    } else if (store) memmove(data, xmm[reg], 16);
+    else memmove(xmm[reg], data, 16);
+    return true;
+}
+
 static void instruction(vm *v)
 {
     v->origin = v->ip;
@@ -279,7 +332,7 @@ static void instruction(vm *v)
     }
     bits = (rex & 8) ? 64 : wide16 ? 16 : 32;
     if (v->failed) return;
-    if (repeat && byte != 0xa4 && byte != 0xa5 && byte != 0xaa && byte != 0xab) { fault(v, "unsupported REP instruction at guest IP 0x%" PRIx64, v->origin); return; }
+    if (repeat && byte != 0x0f && byte != 0xa4 && byte != 0xa5 && byte != 0xaa && byte != 0xab) { fault(v, "unsupported REP instruction at guest IP 0x%" PRIx64, v->origin); return; }
     if (byte < 0x40 && ((byte & 7) == 4 || (byte & 7) == 5)) {
         unsigned width = (byte & 1) ? bits : 8, kind = (byte >> 3) & 7;
         uint64_t value = fetch(v, width == 64 ? 4 : width/8);
@@ -343,6 +396,8 @@ static void instruction(vm *v)
     case 0xeb: { int8_t delta = (int8_t)fetch(v, 1); v->ip = pointer(v, v->ip + delta); return; }
     case 0x0f: {
         unsigned second = (unsigned)fetch(v, 1);
+        if (simd_instruction(v, second, rex, wide16, repeat)) return;
+        if (repeat) break;
         if (second == 0xa2) {
             uint32_t leaf = (uint32_t)v->r[0];
             v->r[0] = v->r[1] = v->r[2] = v->r[3] = 0;
@@ -377,6 +432,7 @@ static void instruction(vm *v)
     case 0x88: case 0x8a: case 0x84:
     case 0x89: case 0x8b: case 0x8d: case 0xc7: case 0xc6: case 0x63:
     case 0x01: case 0x03: case 0x09: case 0x0b: case 0x21: case 0x23:
+    case 0x11: case 0x13: case 0x19: case 0x1b:
     case 0x29: case 0x2b: case 0x31: case 0x33: case 0x39: case 0x3b: case 0x85:
     case 0x80: case 0x81: case 0x83: case 0xf6: case 0xf7: case 0xff: {
         unsigned reg; operand op = modrm(v, rex, &reg);
@@ -448,6 +504,21 @@ static void instruction(vm *v)
             break;
         }
         if (byte == 0xf6 || byte == 0xf7) {
+            if (byte==0xf7 && (reg & 7)==6) {
+                uint64_t divisor=get_operand(v,op,bits), high=get_reg(v,2,bits), low=get_reg(v,0,bits);
+                if (v->failed) return;
+                if (!divisor || high>=divisor) { fault(v,"guest divide error (zero divisor or quotient overflow) at IP 0x%" PRIx64,v->origin); return; }
+                uint64_t quotient=0, remainder=high;
+                if (bits<64) {
+                    uint64_t dividend=(high<<bits)|low;
+                    quotient=dividend/divisor; remainder=dividend%divisor;
+                } else for (unsigned i=64;i;i--) {
+                    bool carry=(remainder>>63)!=0;
+                    remainder=(remainder<<1)|((low>>(i-1))&1);
+                    if (carry || remainder>=divisor) { remainder-=divisor; quotient|=UINT64_C(1)<<(i-1); }
+                }
+                set_reg(v,0,quotient,bits); set_reg(v,2,remainder,bits); return;
+            }
             if ((reg & 7) != 0) break;
             if (byte == 0xf6) {
                 bits = 8;
@@ -715,6 +786,28 @@ static int object_signaled(vm *v, uint64_t handle, bool consume, unsigned owner)
 static uint64_t dispatch(vm *v, int id, uint64_t *a)
 {
     switch (id) {
+    case VERSION_CONDITION: {
+        unsigned types=(uint32_t)a[1], condition=(uint8_t)a[2]&7;
+        for (unsigned i=0;i<8;i++) if (types & (1U<<i)) return a[0] | (uint64_t)condition<<(i*3);
+        return a[0];
+    }
+    case VERIFY_VERSION: {
+        if (!a[0]) { v->last_error=87; return 0; }
+        uint8_t *info=access_memory(v,a[0],284,LW_READ);
+        if (!info) return 0;
+        uint32_t error=lw_version_verify(info,(uint32_t)a[1],a[2]);
+        if (error) { v->last_error=error; return 0; }
+        return 1;
+    }
+    case GET_VERSION: return (LW_VERSION_BUILD<<16)|(LW_VERSION_MINOR<<8)|LW_VERSION_MAJOR;
+    case GET_VERSION_EX: {
+        if (!a[0]) { v->last_error=87; return 0; }
+        uint32_t size=(uint32_t)read_mem(v,a[0],4);
+        if (size!=276 && size!=284) { v->last_error=87; return 0; }
+        uint8_t *info=memory(v,a[0],size);
+        if (!info) return 0;
+        lw_version_info(info,size); return 1;
+    }
     case EXIT_PROCESS: v->done = true; v->exit_code = (uint32_t)a[0]; return 0;
     case GET_STD_HANDLE:
         if ((uint32_t)a[0] == (uint32_t)-11) return 0x100;
@@ -1026,18 +1119,21 @@ static uint64_t dispatch(vm *v, int id, uint64_t *a)
 static void call_api(vm *v, int index)
 {
     uint64_t a[12] = {0};
-    for (unsigned i = 0; i < apis[index].argc; i++) {
+    unsigned argc=apis[index].argc + (v->word==4 && (index==VERSION_CONDITION || index==VERIFY_VERSION) ? 1U : 0U);
+    for (unsigned i = 0; i < argc; i++) {
         if (v->word == 8 && i < 4) a[i] = v->r[(unsigned[]){1, 2, 8, 9}[i]];
         else a[i] = read_mem(v, v->r[4] + (v->word == 8 ? 40 + (uint64_t)(i - 4) * 8 : (uint64_t)(i + 1) * 4), v->word);
     }
     if (v->failed) return;
+    if (v->word==4 && index==VERSION_CONDITION) { a[0] |= a[1]<<32; a[1]=a[2]; a[2]=a[3]; }
+    if (v->word==4 && index==VERIFY_VERSION) a[2] |= a[3]<<32;
     v->calls++;
     uint64_t result = dispatch(v, index, a);
     if (v->failed || v->done || v->thread_exit) return;
     set_reg(v, 0, result, v->pe->bits);
-    if (v->word == 4 && index == GET_TICK_COUNT64) v->r[2] = result >> 32;
+    if (v->word == 4 && (index == GET_TICK_COUNT64 || index == VERSION_CONDITION)) v->r[2] = result >> 32;
     v->ip = pop(v);
-    if (v->word == 4) v->r[4] = pointer(v, v->r[4] + apis[index].argc * 4);
+    if (v->word == 4) v->r[4] = pointer(v, v->r[4] + argc * 4);
 }
 
 static bool image_span(vm *v, uint64_t address, uint64_t size)
