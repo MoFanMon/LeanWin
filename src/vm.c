@@ -788,7 +788,7 @@ static uint64_t dispatch(vm *v, int id, uint64_t *a)
     switch (id) {
     case VERSION_CONDITION: {
         unsigned types=(uint32_t)a[1], condition=(uint8_t)a[2]&7;
-        for (unsigned i=0;i<8;i++) if (types & (1U<<i)) return a[0] | (uint64_t)condition<<(i*3);
+        for (unsigned i=0;i<8;i++) if (types & (1U<<i)) return a[0] | UINT64_C(0x8000000000000000) | (uint64_t)condition<<(i*3);
         return a[0];
     }
     case VERIFY_VERSION: {

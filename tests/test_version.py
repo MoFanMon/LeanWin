@@ -13,8 +13,7 @@ CLI=Path(os.environ.get("LEANWIN_CLI", ROOT/"build/leanwin"))
 def condition_probe(bits=64):
     p=Probe(["VerSetConditionMask","GetStdHandle","WriteFile"],bits)
     output=p.blob(b"\0"*8); written=p.blob(b"\0"*4)
-    # Only the eight documented three-bit fields are meaningful. Build a valid
-    # mask from zero rather than asserting on reserved high-bit behavior.
+    # Build from zero; native Windows also sets bit 63 in the returned mask.
     p.mov(2,0x11223344)
     p.invoke("VerSetConditionMask", [0,0,128,1] if bits==32 else [0,128,1])
     p.invoke("VerSetConditionMask", [reg(0),reg(2),2,3] if bits==32 else [reg(0),2,3])
@@ -24,22 +23,25 @@ def condition_probe(bits=64):
     p.invoke("WriteFile",[reg(0),p.base+output,8,p.base+written,0])
     p.copy(0,3)
     p.equal(0x200018)
-    if bits==32: p.copy(0,6); p.equal(0)
-    else: p.mov(3,0x200018); p.require(b"\x48\x39\xd8")
+    if bits==32: p.copy(0,6); p.equal(0x80000000)
+    else: p.mov(3,0x8000000000200018); p.require(b"\x48\x39\xd8")
     p.finish(); return p
 
 
 def version_probe(bits=64):
     # Compare against the version actually returned by this environment, so
     # native Windows may use its manifest-dependent profile.
-    p=Probe(["GetVersionExW","VerifyVersionInfoW","GetLastError"],bits)
+    p=Probe(["GetVersionExW","VerifyVersionInfoW","VerSetConditionMask","GetLastError"],bits)
     info=p.blob(struct.pack("<I",284)+b"\0"*280)
     p.invoke("GetVersionExW",[p.base+info]); p.equal(1)
-    mask=1|(1<<3)|(1<<12)|(1<<15)
-    p.invoke("VerifyVersionInfoW",[p.base+info,0x33,mask,0] if bits==32 else [p.base+info,0x33,mask]); p.equal(1)
+    def compare(op):
+        p.mov(0,0); p.mov(2,0)
+        for field in (1,2,16,32):
+            p.invoke("VerSetConditionMask",[reg(0),reg(2),field,op] if bits==32 else [reg(0),field,op])
+        p.invoke("VerifyVersionInfoW",[p.base+info,0x33,reg(0),reg(2)] if bits==32 else [p.base+info,0x33,reg(0)])
+    compare(1); p.equal(1)
     p.mov(0,p.base+info); p.emit(b"\xc7\x40\x04\xff\xff\xff\xff")
-    mask=3|(3<<3)|(3<<12)|(3<<15)
-    p.invoke("VerifyVersionInfoW",[p.base+info,0x33,mask,0] if bits==32 else [p.base+info,0x33,mask]); p.equal(0)
+    compare(3); p.equal(0)
     p.call("GetLastError"); p.equal(1150); p.finish(); return p
 
 
