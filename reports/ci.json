@@ -1,38 +1,38 @@
 {
   "date": "2026-10-29",
-  "tested_commit": "4e4fbc24f08459c0115fb6f707cf147b35e98ddc",
-  "workflow_run_id": 40871113059,
-  "workflow_url": "https://github.com/MoFanMon/LeanWin/actions/runs/40871113059",
+  "tested_commit": "06f0576c732fa0168ec374e02123deec81b451a3",
+  "workflow_run_id": 40876368704,
+  "workflow_url": "https://github.com/MoFanMon/LeanWin/actions/runs/40876368704",
   "conclusion": "success",
   "jobs": [
     {
-      "job_id": 123438100956,
+      "job_id": 123456107366,
       "name": "windows-native",
       "conclusion": "success",
       "smoke_backend": "native-windows",
-      "smoke_cases": 34,
+      "smoke_cases": 44,
       "smoke_status": "PASS"
     },
     {
-      "job_id": 123438101358,
-      "name": "compatibility (ubuntu-24.04)",
-      "conclusion": "success",
-      "unit_tests": 104,
-      "sanitized_unit_tests": 104,
-      "mutated_execution_and_inspection_inputs": 360,
-      "smoke_backend": "leanwin",
-      "smoke_cases": 34,
-      "smoke_status": "PASS"
-    },
-    {
-      "job_id": 123438101365,
+      "job_id": 123456107898,
       "name": "compatibility (macos-14)",
       "conclusion": "success",
-      "unit_tests": 104,
-      "sanitized_unit_tests": 104,
+      "unit_tests": 117,
+      "sanitized_unit_tests": 117,
       "mutated_execution_and_inspection_inputs": 360,
       "smoke_backend": "leanwin",
-      "smoke_cases": 34,
+      "smoke_cases": 44,
+      "smoke_status": "PASS"
+    },
+    {
+      "job_id": 123456107899,
+      "name": "compatibility (ubuntu-24.04)",
+      "conclusion": "success",
+      "unit_tests": 117,
+      "sanitized_unit_tests": 117,
+      "mutated_execution_and_inspection_inputs": 360,
+      "smoke_backend": "leanwin",
+      "smoke_cases": 44,
       "smoke_status": "PASS"
     }
   ],

@@ -211,8 +211,8 @@ python tools/smoke.py --output reports/windows-native.json
 
 GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 44 项原生执行检查。
 新增区域设置、线程区域隔离、区域数据、字符串处理与系统信息的 10 项对照用例。
-2026-10-29 的[SIMD 与版本接口跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40871113059)全部通过，
-准确的测试提交、任务与计数记录在 [reports/ci.json](reports/ci.json)，34 项 Windows 结果见
+2026-10-29 的[区域设置接口跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40876368704)全部通过，
+准确的测试提交、任务与计数记录在 [reports/ci.json](reports/ci.json)，44 项 Windows 结果见
 [reports/windows-native.json](reports/windows-native.json)。本机 `validation.json` 仅记录本机检查，Windows 结果由独立 CI 任务提供。
 每次运行的真实结果与报告以仓库的 [Actions](https://github.com/MoFanMon/LeanWin/actions) 为准。
 

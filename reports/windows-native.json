@@ -87,6 +87,31 @@
       "exit_code": 0
     },
     {
+      "name": "locale32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "thread-locale32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "locale-info32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "ordinal32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "system-info32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
       "name": "console64",
       "status": "PASS",
       "exit_code": 37
@@ -168,6 +193,31 @@
     },
     {
       "name": "version-query64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "locale64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "thread-locale64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "locale-info64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "ordinal64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "system-info64",
       "status": "PASS",
       "exit_code": 0
     }

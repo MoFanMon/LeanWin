@@ -47,5 +47,6 @@
   "previous_deferred_instruction_count": 11878,
   "visible_installer_window": false,
   "installation_completed": false,
-  "note": "Startup passed SetThreadLocale and GetSystemInfo. This does not validate complete NLS, x87, TLS initialization, installer GUI or application compatibility."
+  "note": "Startup passed SetThreadLocale and GetSystemInfo. This does not validate complete NLS, x87, TLS initialization, installer GUI or application compatibility.",
+  "tested_runtime_commit": "06f0576c732fa0168ec374e02123deec81b451a3"
 }
