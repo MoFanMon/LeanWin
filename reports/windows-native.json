@@ -67,6 +67,26 @@
       "exit_code": 0
     },
     {
+      "name": "simd32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "aligned-simd32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "version-condition32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "version-query32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
       "name": "console64",
       "status": "PASS",
       "exit_code": 37
@@ -128,6 +148,26 @@
     },
     {
       "name": "context64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "simd64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "aligned-simd64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "version-condition64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "version-query64",
       "status": "PASS",
       "exit_code": 0
     }

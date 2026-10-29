@@ -1,6 +1,6 @@
 {
   "date": "2026-10-29",
-  "generated_at_utc": "2026-10-29T11:48:53.071440+00:00",
+  "generated_at_utc": "2026-10-29T12:12:47.400898+00:00",
   "file": "DeepSeekQQ-Setup.exe",
   "sha256": "a042a1878d94b5359df91acf1d3866ae601a64ce6f22ec9d0379721ba3836847",
   "status": "blocked",
@@ -15,9 +15,9 @@
         "guest_exit_code": 0,
         "instructions": 0,
         "api_calls": 0,
-        "elapsed_ms": 2.126,
+        "elapsed_ms": 2.042,
         "guest_memory_bytes": 1974272,
-        "host_peak_rss_bytes": 3145728,
+        "host_peak_rss_bytes": 3162112,
         "status": "error",
         "error": "unimplemented import kernel32.dll!GetFullPathNameW"
       }
@@ -29,9 +29,9 @@
         "guest_exit_code": 0,
         "instructions": 11878,
         "api_calls": 9,
-        "elapsed_ms": 0.712,
+        "elapsed_ms": 0.571,
         "guest_memory_bytes": 2048024,
-        "host_peak_rss_bytes": 3391488,
+        "host_peak_rss_bytes": 3407872,
         "status": "error",
         "error": "called unimplemented import kernel32.dll!SetThreadLocale at guest IP 0x403870"
       }
@@ -46,5 +46,6 @@
   "previous_deferred_instruction_count": 619,
   "visible_installer_window": false,
   "installation_completed": false,
-  "note": "Startup execution progressed past the previous SSE2 blocker. Deferred imports fail when called. This does not validate completed TLS initialization, installation, GUI or application compatibility."
+  "note": "Startup execution progressed past the previous SSE2 blocker. Deferred imports fail when called. This does not validate completed TLS initialization, installation, GUI or application compatibility.",
+  "tested_runtime_commit": "4e4fbc24f08459c0115fb6f707cf147b35e98ddc"
 }
