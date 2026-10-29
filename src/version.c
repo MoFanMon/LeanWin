@@ -25,6 +25,7 @@ uint32_t lw_version_verify(const uint8_t *p, uint32_t types, uint64_t conditions
         if (condition && condition!=op) return 50;
         condition=op;
         uint32_t requested=i<2 ? u32(p+offsets[i]) : u16(p+offsets[i]);
+        if (requested>65535) return 50;
         if (!relation && current[i]!=requested) relation=current[i]>requested ? 1 : -1;
     }
     int matches=condition==1 ? relation==0 : condition==2 ? relation>0 : condition==3 ? relation>=0 : condition==4 ? relation<0 : relation<=0;

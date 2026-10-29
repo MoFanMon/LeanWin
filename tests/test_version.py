@@ -40,7 +40,7 @@ def version_probe(bits=64):
             p.invoke("VerSetConditionMask",[reg(0),reg(2),field,op] if bits==32 else [reg(0),field,op])
         p.invoke("VerifyVersionInfoW",[p.base+info,0x33,reg(0),reg(2)] if bits==32 else [p.base+info,0x33,reg(0)])
     compare(1); p.equal(1)
-    p.mov(0,p.base+info); p.emit(b"\xc7\x40\x04\xff\xff\xff\xff")
+    p.mov(0,p.base+info); p.emit(b"\xc7\x40\x04\x14\0\0\0") # A future version within the supported component range.
     compare(3); p.equal(0)
     p.call("GetLastError"); p.equal(1150)
     # Preserve the failing assertion number in native CI rather than hiding
@@ -87,13 +87,13 @@ class VersionTests(unittest.TestCase):
     def test_version_comparison_uses_hierarchy_and_reports_unsatisfied_requirements(self):
         for bits in (32,64):
             p=Probe(["VerifyVersionInfoW","GetLastError"],bits)
-            for major,minor,op,expected in [(6,3,3,1),(10,1,3,0),(11,0,3,0),(10,0,1,1),(10,0,2,0),(10,0,5,1)]:
+            for major,minor,op,expected in [(6,3,3,1),(10,1,3,0),(11,0,3,0),(10,0,1,1),(10,0,2,0),(10,0,5,1),(65536,0,3,0)]:
                 info=p.blob(struct.pack("<IIIII",284,major,minor,0,2)+b"\0"*264)
                 # Compare major, minor and both service-pack fields together.
                 mask=op|(op<<3)|(op<<12)|(op<<15)
                 p.invoke("VerifyVersionInfoW",[p.base+info,0x33,mask,0] if bits==32 else [p.base+info,0x33,mask])
                 p.equal(expected)
-                if not expected: p.call("GetLastError"); p.equal(1150)
+                if not expected: p.call("GetLastError"); p.equal(50 if major>65535 else 1150)
             p.finish()
             with self.subTest(bits=bits):
                 r=self.run_probe(p); self.assertEqual(r.returncode,0,r.stderr)

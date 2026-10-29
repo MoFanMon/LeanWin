@@ -104,7 +104,8 @@ TLS 模板、索引地址和回调表必须在客体映像内，回调目标必�
 版本接口：`VerSetConditionMask`, `VerifyVersionInfoW`, `GetVersion`, `GetVersionExW`。
 当前版本配置固定为 Windows 10.0.19045、workstation，独立于 macOS/Linux 主机；这不是系统功能完整性的声明。
 `GetVersionExW` 支持 276 / 284 字节结构，`VerifyVersionInfoW` 支持 major、minor 和 service-pack
-组成的分层版本比较；选中字段须使用相同关系运算符。不支持的字段或混合运算符返回错误 50，条件非法返回 87，
+组成的分层版本比较；选中字段须使用相同关系运算符，major/minor 组件限定为 0..65535。
+超范围、未支持的字段或混合运算符返回错误 50，条件非法返回 87，
 版本不满足返回 1150。暂不模拟应用 manifest 导致的版本返回差异。
 
 线程与同步接口：`GetCurrentThread`, `GetCurrentThreadId`, `CreateThread`, `ExitThread`, `GetExitCodeThread`,
