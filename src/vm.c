@@ -5,6 +5,7 @@
 #include "resource.h"
 #include "process.h"
 #include "version.h"
+#include "locale.h"
 #include <ctype.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -107,7 +108,9 @@ enum { EXIT_PROCESS, GET_STD_HANDLE, WRITE_FILE, READ_FILE, CREATE_FILE, CLOSE_H
        CRITICAL_INIT, CRITICAL_ENTER, CRITICAL_LEAVE, CRITICAL_DELETE,
        CREATE_PROCESS, GET_COMMAND_LINE, GET_MODULE_FILENAME, GET_STARTUP_INFO,
        PERFORMANCE_FREQUENCY, PERFORMANCE_COUNTER, VERSION_CONDITION, VERIFY_VERSION,
-       GET_VERSION, GET_VERSION_EX, API_COUNT };
+       GET_VERSION, GET_VERSION_EX, SET_THREAD_LOCALE, GET_THREAD_LOCALE, VALID_LOCALE,
+       USER_LCID, SYSTEM_LCID, USER_LANG, SYSTEM_LANG, USER_UI_LANG, SYSTEM_UI_LANG,
+       LOCALE_INFO, COMPARE_ORDINAL, MAP_STRING, SYSTEM_INFO, API_COUNT };
 static const api apis[] = {
     {"ExitProcess",1,false}, {"GetStdHandle",1,false}, {"WriteFile",5,false},
     {"ReadFile",5,false}, {"CreateFileW",7,false}, {"CloseHandle",1,false},
@@ -132,7 +135,12 @@ static const api apis[] = {
     {"LeaveCriticalSection",1,false}, {"DeleteCriticalSection",1,false},
     {"CreateProcessW",10,false}, {"GetCommandLineW",0,false}, {"GetModuleFileNameW",3,false},
     {"GetStartupInfoW",1,false}, {"QueryPerformanceFrequency",1,false}, {"QueryPerformanceCounter",1,false},
-    {"VerSetConditionMask",3,false}, {"VerifyVersionInfoW",3,false}, {"GetVersion",0,false}, {"GetVersionExW",1,false}
+    {"VerSetConditionMask",3,false}, {"VerifyVersionInfoW",3,false}, {"GetVersion",0,false}, {"GetVersionExW",1,false},
+    {"SetThreadLocale",1,false}, {"GetThreadLocale",0,false}, {"IsValidLocale",2,false},
+    {"GetUserDefaultLCID",0,false}, {"GetSystemDefaultLCID",0,false},
+    {"GetUserDefaultLangID",0,false}, {"GetSystemDefaultLangID",0,false},
+    {"GetUserDefaultUILanguage",0,false}, {"GetSystemDefaultUILanguage",0,false},
+    {"GetLocaleInfoW",4,false}, {"CompareStringOrdinal",5,false}, {"LCMapStringW",6,false}, {"GetSystemInfo",1,false}
 };
 static uint64_t create_thread(vm *, uint64_t *);
 static bool executable_address(vm *, uint64_t);
@@ -783,9 +791,115 @@ static int object_signaled(vm *v, uint64_t handle, bool consume, unsigned owner)
     }
     return -1;
 }
+static const uint8_t *utf16_span(vm *v, uint64_t address, int32_t length, size_t *units, bool terminator)
+{
+    if (!address || length < -1 || length>1048576) { v->last_error=87; return NULL; }
+    size_t n;
+    if (length==-1) {
+        for (n=0;n<1048576;n++) {
+            uint64_t c=read_mem(v,address+n*2,2);
+            if (v->failed) return NULL;
+            if (!c) break;
+        }
+        if (n==1048576) { v->last_error=87; return NULL; }
+        if (terminator) n++;
+    } else n=(size_t)length;
+    *units=n;
+    return access_memory(v,address,n*2,LW_READ);
+}
+static uint16_t utf16_unit(const uint8_t *p, size_t index) { return (uint16_t)(p[index*2] | (uint16_t)p[index*2+1]<<8); }
+static uint16_t ascii_case(uint16_t c, bool upper)
+{
+    if (upper && c>='a' && c<='z') return c-32;
+    if (!upper && c>='A' && c<='Z') return c+32;
+    return c;
+}
 static uint64_t dispatch(vm *v, int id, uint64_t *a)
 {
     switch (id) {
+    case SYSTEM_INFO: {
+        unsigned size=v->word==8 ? 48 : 36;
+        uint8_t *out=memory(v,a[0],size);
+        if (!out) return 0;
+        memset(out,0,size);
+        write_mem(v,a[0],v->word==8 ? 9 : 0,2);
+        write_mem(v,a[0]+4,4096,4);
+        write_mem(v,a[0]+8,0x10000,v->word);
+        write_mem(v,a[0]+8+v->word,v->word==8 ? UINT64_C(0x7ffffffeffff) : 0x7ffeffff,v->word);
+        write_mem(v,a[0]+8+v->word*2,1,v->word);
+        write_mem(v,a[0]+8+v->word*3,1,4);
+        write_mem(v,a[0]+12+v->word*3,v->word==8 ? 8664 : 386,4);
+        write_mem(v,a[0]+16+v->word*3,65536,4);
+        write_mem(v,a[0]+20+v->word*3,3,2);
+        return 0;
+    }
+    case LOCALE_INFO: {
+        int32_t capacity=(int32_t)a[3];
+        if (capacity<0 || capacity>1048576 || (capacity && !a[2])) { v->last_error=87; return 0; }
+        const char *text=NULL; uint32_t number=0;
+        uint32_t error=lw_locale_info((uint32_t)a[0],(uint32_t)a[1],&text,&number);
+        if (error) { v->last_error=error; return 0; }
+        if (a[1]&0x20000000U) {
+            if (!capacity) return 2;
+            if (capacity<2) { v->last_error=122; return 0; }
+            write_mem(v,a[2],number,4); return v->failed ? 0 : 2;
+        }
+        size_t units=0;
+        lw_utf8_to_utf16((const uint8_t *)text,strlen(text)+1,NULL,0,true,&units);
+        if (!capacity) return units;
+        if ((size_t)capacity<units) { v->last_error=122; return 0; }
+        uint8_t *out=memory(v,a[2],units*2);
+        if (!out) return 0;
+        error=lw_utf8_to_utf16((const uint8_t *)text,strlen(text)+1,out,units,true,&units);
+        if (error) { v->last_error=error; return 0; }
+        return units;
+    }
+    case COMPARE_ORDINAL: {
+        unsigned ignore_case=(uint32_t)a[4];
+        if (ignore_case>1) { v->last_error=87; return 0; }
+        size_t left_count,right_count;
+        const uint8_t *left=utf16_span(v,a[0],(int32_t)a[1],&left_count,false);
+        const uint8_t *right=utf16_span(v,a[2],(int32_t)a[3],&right_count,false);
+        if (!left || !right) return 0;
+        if (ignore_case) {
+            for (size_t i=0;i<left_count;i++) if (utf16_unit(left,i)>127) { v->last_error=50; return 0; }
+            for (size_t i=0;i<right_count;i++) if (utf16_unit(right,i)>127) { v->last_error=50; return 0; }
+        }
+        for (size_t i=0;i<left_count && i<right_count;i++) {
+            uint16_t l=utf16_unit(left,i),r=utf16_unit(right,i);
+            if (ignore_case) { l=ascii_case(l,true); r=ascii_case(r,true); }
+            if (l!=r) return l<r ? 1 : 3;
+        }
+        return left_count==right_count ? 2 : left_count<right_count ? 1 : 3;
+    }
+    case MAP_STRING: {
+        uint32_t flags=(uint32_t)a[1];
+        if (!lw_locale_resolve((uint32_t)a[0])) { v->last_error=87; return 0; }
+        if (flags!=0x100 && flags!=0x200) { v->last_error=1004; return 0; }
+        int32_t capacity=(int32_t)a[5]; size_t count;
+        if (!(int32_t)a[3] || capacity<0 || capacity>1048576 || (capacity && !a[4])) { v->last_error=87; return 0; }
+        const uint8_t *source=utf16_span(v,a[2],(int32_t)a[3],&count,true);
+        if (!source) return 0;
+        for (size_t i=0;i<count;i++) if (utf16_unit(source,i)>127) { v->last_error=50; return 0; }
+        if (!capacity) return count;
+        if ((size_t)capacity<count) { v->last_error=122; return 0; }
+        if (a[2]!=a[4] && a[2]<a[4]+count*2 && a[4]<a[2]+count*2) { v->last_error=87; return 0; }
+        uint8_t *out=memory(v,a[4],count*2);
+        if (!out) return 0;
+        for (size_t i=0;i<count;i++) { uint16_t c=ascii_case(utf16_unit(source,i),flags==0x200); out[i*2]=(uint8_t)c; out[i*2+1]=0; }
+        return count;
+    }
+    case SET_THREAD_LOCALE: {
+        uint32_t locale=lw_locale_resolve((uint32_t)a[0]);
+        if (!locale) { v->last_error=87; return 0; }
+        write_mem(v,thread_tls_base(v)+(v->word==8 ? 0x108 : 0xc4),locale,4); return !v->failed;
+    }
+    case GET_THREAD_LOCALE: return read_mem(v,thread_tls_base(v)+(v->word==8 ? 0x108 : 0xc4),4);
+    case VALID_LOCALE:
+        if ((uint32_t)a[1]!=1 && (uint32_t)a[1]!=2) { v->last_error=1004; return 0; }
+        return (uint32_t)a[0]==0x409 || (uint32_t)a[0]==0x804 || (uint32_t)a[0]==0x7f;
+    case USER_LCID: case SYSTEM_LCID: case USER_LANG: case SYSTEM_LANG: case USER_UI_LANG: case SYSTEM_UI_LANG:
+        return LW_DEFAULT_LOCALE;
     case VERSION_CONDITION: {
         unsigned types=(uint32_t)a[1], condition=(uint8_t)a[2]&7;
         for (unsigned i=0;i<8;i++) if (types & (1U<<i)) return a[0] | UINT64_C(0x8000000000000000) | (uint64_t)condition<<(i*3);
@@ -1162,6 +1276,7 @@ static uint8_t *allocate_tls(vm *v, unsigned index)
     write_mem(v, base+(v->word == 8 ? 0x30 : 0x18), base, v->word);
     write_mem(v, base+(v->word == 8 ? 0x58 : 0x2c), base+4096, v->word);
     write_mem(v, base+4096, base+TLS_FIXED_SIZE, v->word);
+    write_mem(v, base+(v->word==8 ? 0x108 : 0xc4), LW_DEFAULT_LOCALE, 4);
     return data;
 }
 static void prepare_tls(vm *v)

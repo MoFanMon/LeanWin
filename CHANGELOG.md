@@ -2,6 +2,16 @@
 
 ## 2026-10-29
 
+### 区域设置与客体系统信息
+
+- 新增 13 个入口，总数为 82：线程区域设置、默认 LCID/语言/UI 语言、区域数据查询、序数比较、ASCII 大小写映射和 GetSystemInfo。
+- 支持 en-US、zh-CN、invariant 的固定配置；线程设置独立并同步到 TEB，新线程使用用户默认区域。
+- 区域查询支持字符串/数值布局、长度查询和缓冲区错误；序数比较支持 UTF-16 与嵌入零字符。明确拒绝未实现的语言学排序、Unicode 大小写、其他 LCID 或映射标志。
+- 117 项普通版与 ASan/UBSan 测试通过，Windows 原生对照扩展为 44 项。
+- DeepSeekQQ 诊断模式推进到 11,949 条指令、19 次接口调用；当前停在 x87 FNINIT，尚未出现安装界面或完成安装。静态缺失导入降为 78 项。
+
+### SIMD 与版本接口
+
 - 实现安装器使用的 MOVD/MOVQ、MOVUPS、MOVAPS、PSHUFD，保留完整 XMM 数据和线程隔离；检查完整内存范围、页保护和对齐，未宣称完整 SSE2 支持。
 - 增加 VerSetConditionMask、VerifyVersionInfoW、GetVersion、GetVersionExW，接口入口共 69 个；明确固定客体版本配置与比较限制，并处理 x86 的 64 位参数和返回值。
 - 补充实际启动路径需要的 ADC、SBB、无符号 DIV，以及除零/商溢出诊断。

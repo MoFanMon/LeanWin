@@ -1,12 +1,12 @@
 {
   "date": "2026-10-29",
-  "generated_at_utc": "2026-10-29T12:12:47.400898+00:00",
+  "generated_at_utc": "2026-10-29T12:44:49.471491+00:00",
   "file": "DeepSeekQQ-Setup.exe",
   "sha256": "a042a1878d94b5359df91acf1d3866ae601a64ce6f22ec9d0379721ba3836847",
   "status": "blocked",
   "static_import_entries": 153,
-  "known_name_entries": 65,
-  "missing_name_entries": 88,
+  "known_name_entries": 75,
+  "missing_name_entries": 78,
   "attempts": {
     "strict": {
       "host_exit_code": 65,
@@ -15,9 +15,9 @@
         "guest_exit_code": 0,
         "instructions": 0,
         "api_calls": 0,
-        "elapsed_ms": 2.042,
+        "elapsed_ms": 2.062,
         "guest_memory_bytes": 1974272,
-        "host_peak_rss_bytes": 3162112,
+        "host_peak_rss_bytes": 3129344,
         "status": "error",
         "error": "unimplemented import kernel32.dll!GetFullPathNameW"
       }
@@ -27,25 +27,25 @@
       "runtime": {
         "backend": "original-x86-interpreter",
         "guest_exit_code": 0,
-        "instructions": 11878,
-        "api_calls": 9,
-        "elapsed_ms": 0.571,
+        "instructions": 11949,
+        "api_calls": 19,
+        "elapsed_ms": 0.64,
         "guest_memory_bytes": 2048024,
         "host_peak_rss_bytes": 3407872,
         "status": "error",
-        "error": "called unimplemented import kernel32.dll!SetThreadLocale at guest IP 0x403870"
+        "error": "unsupported instruction 0xdb at guest IP 0x405f50"
       }
     }
   },
   "first_deferred_blocker": {
-    "kind": "unimplemented-import-call",
-    "guest_ip": "0x403870",
-    "dll": "kernel32.dll",
-    "name": "SetThreadLocale"
+    "kind": "unsupported-instruction",
+    "guest_ip": "0x405f50",
+    "bytes": "db e3",
+    "instruction": "FNINIT",
+    "required_extension": "x87"
   },
-  "previous_deferred_instruction_count": 619,
+  "previous_deferred_instruction_count": 11878,
   "visible_installer_window": false,
   "installation_completed": false,
-  "note": "Startup execution progressed past the previous SSE2 blocker. Deferred imports fail when called. This does not validate completed TLS initialization, installation, GUI or application compatibility.",
-  "tested_runtime_commit": "4e4fbc24f08459c0115fb6f707cf147b35e98ddc"
+  "note": "Startup passed SetThreadLocale and GetSystemInfo. This does not validate complete NLS, x87, TLS initialization, installer GUI or application compatibility."
 }

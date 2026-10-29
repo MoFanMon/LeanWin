@@ -4,7 +4,7 @@
 MIT 许可。执行核心使用 C11，窗口后端使用 Objective-C/AppKit，编译工具为系统 Clang 和 Make。
 
 当前原型已经执行专门构建的 32 位、64 位 Windows PE 示例，完成控制台输出和文件读写。
-项目包含独立实现的 PE 解析与加载、x86 指令解释器、Windows 调用约定和 69 个接口入口。
+项目包含独立实现的 PE 解析与加载、x86 指令解释器、Windows 调用约定和 82 个接口入口。
 Wine、CrossOver、Rosetta、Windows 虚拟机均不属于当前执行链。
 
 **这是很小的接口子集验证版。当前不能运行 DeepSeekQQ 安装器，也不能运行一般的 Python、Qt、Electron、.NET 桌面软件。**
@@ -60,6 +60,7 @@ python3 examples/build.py
 | PE 资源类型、名称、语言选择和实际数据访问 | 仅当前映像；ASCII 名称转大写，其他 Unicode 字符精确匹配；无 MUI |
 | 客体线程、挂起/恢复、等待、事件与临界区 | 解释器轮转调度，不并行执行；无线程优先级和命名事件 |
 | PE 子进程、命令行、模块路径、退出状态 | 子进程通过另一个 LeanWin 实例运行；启动参数受限 |
+| 线程区域设置、默认语言、区域数据与序数比较 | 固定 en-US / zh-CN / invariant 数据；大小写转换仅支持 ASCII |
 | 控制台和同步文件接口 | 无重叠 I/O、命名管道或设备接口；只支持指定参数子集 |
 | 模块句柄和动态查找已实现接口 | 不加载任意 DLL；不支持按序号解析接口 |
 | `MessageBoxW` 到按需加载的 AppKit 模块 | 仅计划支持 `MB_OK`、空父窗口；实际显示尚未验证 |
@@ -100,6 +101,7 @@ TLS 模板、索引地址和回调表必须在客体映像内，回调目标必�
 
 进程与环境接口：`GetCurrentProcess`, `GetExitCodeProcess`, `CreateProcessW`, `GetCommandLineW`,
 `GetModuleFileNameW`, `GetStartupInfoW`, `QueryPerformanceFrequency`, `QueryPerformanceCounter`。
+`GetSystemInfo` 提供客体架构、4 KiB 页、64 KiB 分配粒度和一个客体逻辑处理器；不把 Apple 主机架构或核心数当作 Windows 客体信息。
 
 版本接口：`VerSetConditionMask`, `VerifyVersionInfoW`, `GetVersion`, `GetVersionExW`。
 当前版本配置固定为 Windows 10.0.19045、workstation，独立于 macOS/Linux 主机；这不是系统功能完整性的声明。
@@ -135,7 +137,25 @@ TLS 模板、索引地址和回调表必须在客体映像内，回调目标必�
 显式长度、`-1` 结尾零字符、代理对、非法序列替换或严格报错，以及输出缓冲区不足的错误。
 `MultiByteToWideChar` 支持标志 0 / `MB_ERR_INVALID_CHARS`，`WideCharToMultiByte` 支持
 0 / `WC_ERR_INVALID_CHARS`；UTF-8 不接受默认字符参数。单次输入或输出缓冲区限制为 16 MiB。
-GBK/936、1252 等其他码页与额外标志暂不支持，返回明确错误。完整 NLS、区域设置及旧码页兼容仍需后续实现。
+GBK/936、1252 等其他码页与额外标志暂不支持，返回明确错误。完整 NLS 和旧码页兼容仍需后续实现。
+
+### 区域设置与语言
+
+`SetThreadLocale` / `GetThreadLocale` 保存每个线程独立的 LCID，设置结果同步到最小 TEB 中。
+新线程使用用户默认区域，而不继承父线程的临时设置。默认区域和 UI 语言固定为 en-US（0x0409），
+另支持 zh-CN（0x0804）和 invariant（0x007f）；0 / `LOCALE_USER_DEFAULT` / `LOCALE_SYSTEM_DEFAULT` 解析到默认区域。
+这是明确的客体配置，不读取或修改 macOS/Linux 的区域设置，不包含其他 LCID、排序变体或完整 MUI 语言回退。
+
+新增 `IsValidLocale`、`GetUserDefaultLCID`、`GetSystemDefaultLCID`、`GetUserDefaultLangID`、
+`GetSystemDefaultLangID`、`GetUserDefaultUILanguage`、`GetSystemDefaultUILanguage`。
+`GetLocaleInfoW` 支持固定字段表中的区域名、ISO 标识、传统码页编号、数字/货币分隔符及日期/时间格式模式，
+包括长度查询、结尾零字符、`LOCALE_NOUSEROVERRIDE`、`LOCALE_RETURN_NUMBER` 的 DWORD 输出和不足缓冲区检查。
+表中的 1252 / 936 是区域元数据；它们不启用对应编码转换，客体 ACP 仍为 UTF-8。
+
+`CompareStringOrdinal` 支持 UTF-16 序数比较、显式长度、嵌入零字符和 -1 结尾字符串。
+忽略大小写模式及 `LCMapStringW` 的大小写转换目前仅接受 ASCII；非 ASCII 大小写处理返回错误 50。
+大小写映射支持长度查询与原地转换，单次输入限制为 1 Mi 个 UTF-16 单元。
+语言学排序 `CompareStringW`、日历枚举和日期格式化函数仍未实现；查询不支持的区域字段返回错误 50。
 
 可一次列出全部缺失导入，而不是逐个遇到第一个错误：
 
@@ -163,7 +183,7 @@ DeepSeekQQ 的实际导入分析与阻断原因见 [reports/deepseekqq.json](rep
 
 ## 本机验证记录
 
-2026-10-29，在 Apple Silicon macOS 上：104 项测试在普通版和 AddressSanitizer /
+2026-10-29，在 Apple Silicon macOS 上：117 项测试在普通版和 AddressSanitizer /
 UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子的变异 PE 分析输入、
 120 个变异 TLS 执行输入、120 个变异资源目录执行输入，以及 4 个实际执行示例。
 可用 `python3 tools/sanitize.py` 重新构建并运行这些检查；结果写入
@@ -172,9 +192,9 @@ UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子
 当前核心可执行文件约 103 KiB；可选窗口模块约 50 KiB，精确字节数见测量报告。
 控制台小示例的新进程启动与执行测量见报告中的各架构中位数；不以单次数字代替真实软件性能。
 这些数字仅对应仓库内的微型示例和本机环境，不能外推到一般 Windows 应用。
-DeepSeekQQ 安装器分析到 153 个静态导入项，其中 88 项入口名称尚未实现；严格模式首先停在
-`kernel32.dll!GetFullPathNameW`。诊断模式执行了 11,878 条指令、9 次接口调用，停在
-`kernel32.dll!SetThreadLocale`（调用位置 `0x403870`）。上次的 SSE2 搬运阻断已越过；
+DeepSeekQQ 安装器分析到 153 个静态导入项，其中 78 项入口名称尚未实现；严格模式首先停在
+`kernel32.dll!GetFullPathNameW`。诊断模式执行了 11,949 条指令、19 次接口调用，停在
+x87 `FNINIT`（位置 `0x405f50`）。上次的 `SetThreadLocale` 与后续 `GetSystemInfo` 阻断已越过；
 尚未进入安装界面，也未验证安装器 TLS 生命周期完成。
 完整缺失清单见 [reports/deepseekqq-imports.json](reports/deepseekqq-imports.json)。
 静态导入项数量不等于完整依赖数量，也不是兼容性百分比。
@@ -189,8 +209,8 @@ python3 tools/smoke.py --runner ./build/leanwin --output reports/smoke.json
 python tools/smoke.py --output reports/windows-native.json
 ```
 
-GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 34 项原生执行检查。
-新增 SSE 搬运、对齐访问、版本条件与版本查询的 8 项对照用例。
+GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 44 项原生执行检查。
+新增区域设置、线程区域隔离、区域数据、字符串处理与系统信息的 10 项对照用例。
 2026-10-29 的[SIMD 与版本接口跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40871113059)全部通过，
 准确的测试提交、任务与计数记录在 [reports/ci.json](reports/ci.json)，34 项 Windows 结果见
 [reports/windows-native.json](reports/windows-native.json)。本机 `validation.json` 仅记录本机检查，Windows 结果由独立 CI 任务提供。
@@ -211,7 +231,7 @@ Windows 接口 → POSIX 文件/进程接口
 
 1. 增加编译器生成的 Win32 测试程序，并扩展真实 Windows 上的接口语义与界面验证。
 2. 补全加载环境：PEB/TEB、进程退出通知、DLL TLS、重定位和异常；扩展现有堆与线程调度的参数语义。
-3. 继续补齐安装器执行路径所需的区域设置与指令，再扩充 SIMD 覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
+3. 实现安装器所需的 x87 状态、控制字与浮点运算，再扩充 NLS 和 SIMD 覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
 4. 实现真实窗口、消息循环和 GDI，再扩展通用控件、注册表、COM 与进程间协作。
 5. 以 DeepSeekQQ / Inno Setup 的导入清单建立回归目标。运行安装器之后，还需要兼容应用本体、QQ 和 NapCat 的完整依赖链。
 
@@ -228,6 +248,9 @@ Windows 接口 → POSIX 文件/进程接口
 - [VirtualAlloc](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc)
 - [CreateProcessW](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw)
 - [Thread Local Storage](https://learn.microsoft.com/en-us/windows/win32/procthread/thread-local-storage)
+- [SetThreadLocale](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-setthreadlocale)
+- [GetLocaleInfoW](https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-getlocaleinfow)
+- [CompareStringOrdinal](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-comparestringordinal)
 - [MultiByteToWideChar](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-multibytetowidechar)
 - [WideCharToMultiByte](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte)
 - [Wine 的加载器与接口实现概述](https://github.com/wine-mirror/wine/blob/master/README.md)

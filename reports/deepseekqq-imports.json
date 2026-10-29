@@ -4,8 +4,8 @@
   "format": "PE32",
   "architecture": "x86",
   "static_import_entries": 153,
-  "supported_import_entries": 65,
-  "missing_import_entries": 88,
+  "supported_import_entries": 75,
+  "missing_import_entries": 78,
   "supported_imports": [
     {
       "dll": "kernel32.dll",
@@ -65,6 +65,11 @@
     {
       "dll": "kernel32.dll",
       "symbol": "GetCPInfoExW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "CompareStringOrdinal",
       "delayed": false
     },
     {
@@ -219,6 +224,11 @@
     },
     {
       "dll": "kernel32.dll",
+      "symbol": "GetSystemInfo",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
       "symbol": "LeaveCriticalSection",
       "delayed": false
     },
@@ -249,7 +259,17 @@
     },
     {
       "dll": "kernel32.dll",
+      "symbol": "LCMapStringW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
       "symbol": "VerSetConditionMask",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetUserDefaultUILanguage",
       "delayed": false
     },
     {
@@ -289,6 +309,11 @@
     },
     {
       "dll": "kernel32.dll",
+      "symbol": "GetLocaleInfoW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
       "symbol": "WaitForSingleObject",
       "delayed": false
     },
@@ -314,7 +339,17 @@
     },
     {
       "dll": "kernel32.dll",
+      "symbol": "IsValidLocale",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
       "symbol": "TlsSetValue",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetSystemDefaultUILanguage",
       "delayed": false
     },
     {
@@ -324,7 +359,22 @@
     },
     {
       "dll": "kernel32.dll",
+      "symbol": "GetUserDefaultLangID",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
       "symbol": "CreateEventW",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "SetThreadLocale",
+      "delayed": false
+    },
+    {
+      "dll": "kernel32.dll",
+      "symbol": "GetThreadLocale",
       "delayed": false
     },
     {
@@ -337,11 +387,6 @@
     {
       "dll": "kernel32.dll",
       "symbol": "GetFullPathNameW",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "symbol": "CompareStringOrdinal",
       "delayed": false
     },
     {
@@ -431,17 +476,7 @@
     },
     {
       "dll": "kernel32.dll",
-      "symbol": "GetSystemInfo",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
       "symbol": "GetTempPathW",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "symbol": "LCMapStringW",
       "delayed": false
     },
     {
@@ -452,11 +487,6 @@
     {
       "dll": "kernel32.dll",
       "symbol": "FindFirstFileW",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "symbol": "GetUserDefaultUILanguage",
       "delayed": false
     },
     {
@@ -472,11 +502,6 @@
     {
       "dll": "kernel32.dll",
       "symbol": "FindClose",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "symbol": "GetLocaleInfoW",
       "delayed": false
     },
     {
@@ -501,17 +526,7 @@
     },
     {
       "dll": "kernel32.dll",
-      "symbol": "IsValidLocale",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
       "symbol": "CreateDirectoryW",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "symbol": "GetSystemDefaultUILanguage",
       "delayed": false
     },
     {
@@ -521,22 +536,7 @@
     },
     {
       "dll": "kernel32.dll",
-      "symbol": "GetUserDefaultLangID",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
       "symbol": "RemoveDirectoryW",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "symbol": "SetThreadLocale",
-      "delayed": false
-    },
-    {
-      "dll": "kernel32.dll",
-      "symbol": "GetThreadLocale",
       "delayed": false
     },
     {
