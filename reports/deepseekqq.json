@@ -1,6 +1,6 @@
 {
   "date": "2026-10-29",
-  "generated_at_utc": "2026-10-29T12:44:49.471491+00:00",
+  "generated_at_utc": "2026-10-29T13:15:30.884586+00:00",
   "file": "DeepSeekQQ-Setup.exe",
   "sha256": "a042a1878d94b5359df91acf1d3866ae601a64ce6f22ec9d0379721ba3836847",
   "status": "blocked",
@@ -15,9 +15,9 @@
         "guest_exit_code": 0,
         "instructions": 0,
         "api_calls": 0,
-        "elapsed_ms": 2.062,
+        "elapsed_ms": 1.944,
         "guest_memory_bytes": 1974272,
-        "host_peak_rss_bytes": 3129344,
+        "host_peak_rss_bytes": 3145728,
         "status": "error",
         "error": "unimplemented import kernel32.dll!GetFullPathNameW"
       }
@@ -27,26 +27,24 @@
       "runtime": {
         "backend": "original-x86-interpreter",
         "guest_exit_code": 0,
-        "instructions": 11949,
-        "api_calls": 19,
-        "elapsed_ms": 0.64,
+        "instructions": 12100,
+        "api_calls": 28,
+        "elapsed_ms": 0.512,
         "guest_memory_bytes": 2048024,
-        "host_peak_rss_bytes": 3407872,
+        "host_peak_rss_bytes": 3391488,
         "status": "error",
-        "error": "unsupported instruction 0xdb at guest IP 0x405f50"
+        "error": "called unimplemented import comctl32.dll!InitCommonControls at guest IP 0x40fc28"
       }
     }
   },
   "first_deferred_blocker": {
-    "kind": "unsupported-instruction",
-    "guest_ip": "0x405f50",
-    "bytes": "db e3",
-    "instruction": "FNINIT",
-    "required_extension": "x87"
+    "kind": "unimplemented-import-call",
+    "guest_ip": "0x40fc28",
+    "dll": "comctl32.dll",
+    "name": "InitCommonControls"
   },
-  "previous_deferred_instruction_count": 11878,
+  "previous_deferred_instruction_count": 11949,
   "visible_installer_window": false,
   "installation_completed": false,
-  "note": "Startup passed SetThreadLocale and GetSystemInfo. This does not validate complete NLS, x87, TLS initialization, installer GUI or application compatibility.",
-  "tested_runtime_commit": "06f0576c732fa0168ec374e02123deec81b451a3"
+  "note": "Startup passed x87 initialization and control-word setup. No complete x87 arithmetic, common controls, installer GUI or installation compatibility is claimed."
 }

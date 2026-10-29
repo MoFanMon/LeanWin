@@ -20,6 +20,7 @@ from test_process import process_probe, context_probe
 from test_simd import simd_probe, aligned_simd_probe
 from test_version import condition_probe, version_probe
 from test_locale import locale_probe, locale_thread_probe, locale_info_probe, ordinal_probe, system_info_probe
+from test_fpu import fpu_control_probe, fpu_thread_probe, fpu_environment_probe
 
 
 def tls_probe(bits):
@@ -89,7 +90,11 @@ def main():
                      ("thread-locale", locale_thread_probe(bits), 0, b""),
                      ("locale-info", locale_info_probe(bits), 0, b""),
                      ("ordinal", ordinal_probe(bits), 0, b""),
-                     ("system-info", system_info_probe(bits), 0, b"")]
+                     ("system-info", system_info_probe(bits), 0, b""),
+                     ("x87-control", fpu_control_probe(bits), 0, b""),
+                     ("x87-thread", fpu_thread_probe(bits), 0, b""),
+                     ("x87-env", fpu_environment_probe(bits), 0, b""),
+                     ("x87-env16", fpu_environment_probe(bits,True), 0, b"")]
             for name, program, expected_exit, expected_stdout in cases:
                 folder = Path(directory) / f"{name}{bits}"
                 folder.mkdir()

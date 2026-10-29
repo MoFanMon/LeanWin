@@ -53,7 +53,7 @@ python3 examples/build.py
 | 已实现部分 | 当前限制 |
 |---|---|
 | PE32 / PE32+ 头、区段、普通与延迟导入分析 | 执行阶段在首选映像基址加载；无完整 Windows 加载器环境 |
-| x86、x86-64 整数指令、SSE 数据搬运子集 | 无 SIMD 浮点算术、AVX、x87、JIT 或异常展开 |
+| x86、x86-64 整数指令、SSE 搬运与 x87 控制状态子集 | 无 SIMD/x87 数值算术、AVX、JIT 或异常展开 |
 | x86 stdcall、Windows x64 寄存器和栈参数 | 无完整 PEB、TEB 或 SEH |
 | 静态与动态 TLS、模板复制、启动与线程通知 | 单个 EXE 的静态槽；无 DLL TLS、重定位或进程退出通知 |
 | VirtualAlloc / Free / Protect / Query、进程堆与私有堆 | 受限页保护与分配标志；无映射文件、堆重分配或大页 |
@@ -130,6 +130,15 @@ TLS 模板、索引地址和回调表必须在客体映像内，回调目标必�
 当前仅覆盖少量搬运和重排指令，CPUID 不声明完整 SSE/SSE2 支持。整数路径补充了 ADC、SBB 和无符号 DIV；
 除零和商溢出停止客体并报告错误，尚未通过 Windows SEH 分发异常。
 
+### x87 控制状态
+
+支持 `FNINIT` / `FINIT`、`FLDCW`、`FNSTCW` / `FSTCW`、`FNSTSW` / `FSTSW`、
+`FNCLEX` / `FCLEX`、`FWAIT`、`FLDENV` 与 `FNSTENV` / `FSTENV`。
+每个线程独立保存控制字、状态字、标签字与环境记录，不修改宿主的浮点模式。
+初始化恢复控制字 0x037f；环境支持 14 / 28 字节 legacy 格式，保存后按 x87 语义屏蔽异常。
+等待指令检查未屏蔽的待处理异常，无法通过 SEH 分发时明确停止客体。环境读写检查完整内存范围与页保护。
+这只是控制状态子集，尚不提供 x87 数值栈、算术、80 位浮点转换、FSAVE/FXSAVE 或完整异常行为。
+
 ### 字符编码配置
 
 当前客体采用固定的 UTF-8 ANSI 配置，`GetACP()` 返回 65001；它不是 macOS 的系统码页查询。
@@ -183,9 +192,9 @@ DeepSeekQQ 的实际导入分析与阻断原因见 [reports/deepseekqq.json](rep
 
 ## 本机验证记录
 
-2026-10-29，在 Apple Silicon macOS 上：117 项测试在普通版和 AddressSanitizer /
+2026-10-29，在 Apple Silicon macOS 上：124 项测试在普通版和 AddressSanitizer /
 UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子的变异 PE 分析输入、
-120 个变异 TLS 执行输入、120 个变异资源目录执行输入，以及 4 个实际执行示例。
+120 个变异 TLS 执行输入、120 个变异资源目录执行输入、120 个变异 x87 环境输入，以及 4 个实际执行示例。
 可用 `python3 tools/sanitize.py` 重新构建并运行这些检查；结果写入
 [reports/validation.json](reports/validation.json)。
 
@@ -193,8 +202,8 @@ UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子
 控制台小示例的新进程启动与执行测量见报告中的各架构中位数；不以单次数字代替真实软件性能。
 这些数字仅对应仓库内的微型示例和本机环境，不能外推到一般 Windows 应用。
 DeepSeekQQ 安装器分析到 153 个静态导入项，其中 78 项入口名称尚未实现；严格模式首先停在
-`kernel32.dll!GetFullPathNameW`。诊断模式执行了 11,949 条指令、19 次接口调用，停在
-x87 `FNINIT`（位置 `0x405f50`）。上次的 `SetThreadLocale` 与后续 `GetSystemInfo` 阻断已越过；
+`kernel32.dll!GetFullPathNameW`。诊断模式执行了 12,100 条指令、28 次接口调用，停在
+`comctl32.dll!InitCommonControls`（调用位置 `0x40fc28`）。上次的 x87 初始化阻断已越过；
 尚未进入安装界面，也未验证安装器 TLS 生命周期完成。
 完整缺失清单见 [reports/deepseekqq-imports.json](reports/deepseekqq-imports.json)。
 静态导入项数量不等于完整依赖数量，也不是兼容性百分比。
@@ -209,8 +218,8 @@ python3 tools/smoke.py --runner ./build/leanwin --output reports/smoke.json
 python tools/smoke.py --output reports/windows-native.json
 ```
 
-GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 44 项原生执行检查。
-新增区域设置、线程区域隔离、区域数据、字符串处理与系统信息的 10 项对照用例。
+GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 52 项原生执行检查。
+新增 x87 控制状态、线程隔离和两种环境格式的 8 项对照用例。
 2026-10-29 的[区域设置接口跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40876368704)全部通过，
 准确的测试提交、任务与计数记录在 [reports/ci.json](reports/ci.json)，44 项 Windows 结果见
 [reports/windows-native.json](reports/windows-native.json)。本机 `validation.json` 仅记录本机检查，Windows 结果由独立 CI 任务提供。
@@ -231,7 +240,7 @@ Windows 接口 → POSIX 文件/进程接口
 
 1. 增加编译器生成的 Win32 测试程序，并扩展真实 Windows 上的接口语义与界面验证。
 2. 补全加载环境：PEB/TEB、进程退出通知、DLL TLS、重定位和异常；扩展现有堆与线程调度的参数语义。
-3. 实现安装器所需的 x87 状态、控制字与浮点运算，再扩充 NLS 和 SIMD 覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
+3. 实现 x87 数值栈与浮点运算，再扩充 NLS 和 SIMD 覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
 4. 实现真实窗口、消息循环和 GDI，再扩展通用控件、注册表、COM 与进程间协作。
 5. 以 DeepSeekQQ / Inno Setup 的导入清单建立回归目标。运行安装器之后，还需要兼容应用本体、QQ 和 NapCat 的完整依赖链。
 

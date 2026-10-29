@@ -6,6 +6,7 @@
 #include "process.h"
 #include "version.h"
 #include "locale.h"
+#include "fpu.h"
 #include <ctype.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -51,6 +52,7 @@ enum { READY, WAIT_OBJECT, SLEEPING, WAIT_CRITICAL };
 typedef struct {
     uint64_t r[16], ip, start, parameter, deadline, wait_handle;
     uint8_t xmm[16][16];
+    lw_fpu fpu;
     unsigned flags, last_error, id, suspend, phase, callback, state;
     uint32_t exit_code;
     uint8_t *stack, *tls;
@@ -321,6 +323,46 @@ static bool simd_instruction(vm *v, unsigned opcode, unsigned rex, bool prefix66
     else memmove(xmm[reg], data, 16);
     return true;
 }
+static bool fpu_wait(vm *v)
+{
+    if (v->threads[v->current].fpu.status & 0x80) {
+        fault(v,"unmasked guest x87 exception at IP 0x%" PRIx64,v->origin); return false;
+    }
+    return true;
+}
+static bool fpu_instruction(vm *v, unsigned opcode, unsigned rex, bool short_format)
+{
+    unsigned reg; operand op=modrm(v,rex,&reg); reg&=7;
+    lw_fpu *f=&v->threads[v->current].fpu;
+    if (v->failed) return true;
+    if (op.reg) {
+        unsigned second=0xc0|(reg<<3)|(op.index&7);
+        if (opcode==0xdb && second==0xe3) { lw_fpu_init(f); return true; }
+        if (opcode==0xdb && second==0xe2) { lw_fpu_clear(f); return true; }
+        if (opcode==0xdf && second==0xe0) { set_reg(v,0,f->status,16); return true; }
+        return false;
+    }
+    uint64_t address=pointer(v,effective(v,op)+v->segment);
+    if (opcode==0xd9 && (reg==4 || reg==6)) {
+        bool store=reg==6;
+        if (!store && !fpu_wait(v)) return true;
+        uint8_t *data=access_memory(v,address,short_format?14:28,store?LW_WRITE:LW_READ);
+        if (data) {
+            if (store) lw_fpu_store_environment(f,data,short_format);
+            else lw_fpu_load_environment(f,data,short_format);
+        }
+        return true;
+    }
+    if (opcode==0xd9 && reg==5) {
+        if (!fpu_wait(v)) return true;
+        uint16_t word=(uint16_t)read_mem(v,address,2);
+        if (!v->failed) lw_fpu_control(f,word);
+        return true;
+    }
+    if (opcode==0xd9 && reg==7) { write_mem(v,address,f->control,2); return true; }
+    if (opcode==0xdd && reg==7) { write_mem(v,address,f->status,2); return true; }
+    return false;
+}
 
 static void instruction(vm *v)
 {
@@ -361,6 +403,10 @@ static void instruction(vm *v)
         v->flags = (v->flags & ~CF) | carry; return;
     }
     switch (byte) {
+    case 0x9b: (void)fpu_wait(v); return;
+    case 0xd9: case 0xdb: case 0xdd: case 0xdf:
+        if (fpu_instruction(v,byte,rex,wide16)) return;
+        break;
     case 0x90: return;
     case 0xfc: v->flags &= ~DF; return;
     case 0x9c: case 0x9d: {
@@ -1341,6 +1387,7 @@ static uint64_t create_thread(vm *v, uint64_t *a)
     if (!tls) { lw_memory_unmap_borrowed(v->memory, stack_base); free(stack); v->last_error = 8; return 0; }
     v->threads[i] = (guest_thread){.stack=stack,.tls=tls,.start=a[2],.parameter=a[3],
         .id=0x40000000U+i,.suspend=a[4] ? 1U : 0U,.open=true};
+    lw_fpu_init(&v->threads[i].fpu);
     v->thread_count++;
     if (a[5]) write_mem(v, a[5], v->threads[i].id, 4);
     return 0x2000+i;
@@ -1474,6 +1521,7 @@ int lw_run(const lw_pe *pe, const lw_run_options *options, lw_result *out, char 
     if (v.failed) goto cleanup;
     v.thread_count = 1;
     v.threads[0] = (guest_thread){.stack=v.stack,.tls=v.tls,.start=pe->image_base+pe->entry,.id=(unsigned)getpid()};
+    lw_fpu_init(&v.threads[0].fpu);
     if (mkdir(root, 0700) && errno != EEXIST) { fault(&v, "cannot create guest drive: %s", strerror(errno)); goto cleanup; }
     v.root = open(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (v.root < 0) { fault(&v, "cannot open guest drive: %s", strerror(errno)); goto cleanup; }
