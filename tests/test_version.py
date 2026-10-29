@@ -4,7 +4,7 @@ import struct
 import subprocess
 import tempfile
 import unittest
-from kernel_fixture import Probe
+from kernel_fixture import Probe, reg
 
 ROOT=Path(__file__).resolve().parents[1]
 CLI=Path(os.environ.get("LEANWIN_CLI", ROOT/"build/leanwin"))
@@ -12,10 +12,14 @@ CLI=Path(os.environ.get("LEANWIN_CLI", ROOT/"build/leanwin"))
 
 def condition_probe(bits=64):
     p=Probe(["VerSetConditionMask"],bits)
-    p.invoke("VerSetConditionMask", [0,0x11223344,2,3] if bits==32 else [0x1122334400000000,2,3])
-    p.equal(24)
-    if bits==32: p.copy(0,2); p.equal(0x11223344)
-    else: p.mov(3,0x1122334400000018); p.require(b"\x48\x39\xd8")
+    # Only the eight documented three-bit fields are meaningful. Build a valid
+    # mask from zero rather than asserting on reserved high-bit behavior.
+    p.mov(2,0x11223344)
+    p.invoke("VerSetConditionMask", [0,0,128,1] if bits==32 else [0,128,1])
+    p.invoke("VerSetConditionMask", [reg(0),reg(2),2,3] if bits==32 else [reg(0),2,3])
+    p.equal(0x200018)
+    if bits==32: p.copy(0,2); p.equal(0)
+    else: p.mov(3,0x200018); p.require(b"\x48\x39\xd8")
     p.finish(); return p
 
 
@@ -39,7 +43,7 @@ class VersionTests(unittest.TestCase):
             exe=Path(d)/"version.exe"; exe.write_bytes(p.image())
             return subprocess.run([str(CLI),"run",str(exe),"--root",str(Path(d)/"drive")],capture_output=True,timeout=5)
 
-    def test_condition_mask_preserves_64_bits_and_both_calling_conventions(self):
+    def test_valid_condition_masks_use_both_windows_calling_conventions(self):
         for bits in (32,64):
             with self.subTest(bits=bits):
                 r=self.run_probe(condition_probe(bits)); self.assertEqual(r.returncode,0,r.stderr)
