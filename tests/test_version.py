@@ -42,7 +42,14 @@ def version_probe(bits=64):
     compare(1); p.equal(1)
     p.mov(0,p.base+info); p.emit(b"\xc7\x40\x04\xff\xff\xff\xff")
     compare(3); p.equal(0)
-    p.call("GetLastError"); p.equal(1150); p.finish(); return p
+    p.call("GetLastError"); p.equal(1150)
+    # Preserve the failing assertion number in native CI rather than hiding
+    # every API discrepancy behind the same generic exit code.
+    p.exit(0)
+    for i,offset in enumerate(p.failures):
+        target=len(p.code); p.exit(101+i)
+        struct.pack_into("<i",p.code,offset,target-offset-4)
+    return p
 
 
 class VersionTests(unittest.TestCase):
