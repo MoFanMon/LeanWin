@@ -82,7 +82,7 @@ def main():
                      ("context", context_probe(bits), 0, b""),
                      ("simd", simd_probe(bits), 0, b""),
                      ("aligned-simd", aligned_simd_probe(bits), 0, b""),
-                     ("version-condition", condition_probe(bits), 0, b""),
+                     ("version-condition", condition_probe(bits), 0, b"\x18\0\x20\0\0\0\0\0"),
                      ("version-query", version_probe(bits), 0, b"")]
             for name, program, expected_exit, expected_stdout in cases:
                 folder = Path(directory) / f"{name}{bits}"

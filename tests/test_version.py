@@ -11,14 +11,20 @@ CLI=Path(os.environ.get("LEANWIN_CLI", ROOT/"build/leanwin"))
 
 
 def condition_probe(bits=64):
-    p=Probe(["VerSetConditionMask"],bits)
+    p=Probe(["VerSetConditionMask","GetStdHandle","WriteFile"],bits)
+    output=p.blob(b"\0"*8); written=p.blob(b"\0"*4)
     # Only the eight documented three-bit fields are meaningful. Build a valid
     # mask from zero rather than asserting on reserved high-bit behavior.
     p.mov(2,0x11223344)
     p.invoke("VerSetConditionMask", [0,0,128,1] if bits==32 else [0,128,1])
     p.invoke("VerSetConditionMask", [reg(0),reg(2),2,3] if bits==32 else [reg(0),2,3])
+    p.copy(3,0); p.copy(6,2)
+    p.mov(0,p.base+output); p.emit(b"\x89\x18\x89\x70\x04" if bits==32 else b"\x48\x89\x18")
+    p.invoke("GetStdHandle",[0xfffffff5])
+    p.invoke("WriteFile",[reg(0),p.base+output,8,p.base+written,0])
+    p.copy(0,3)
     p.equal(0x200018)
-    if bits==32: p.copy(0,2); p.equal(0)
+    if bits==32: p.copy(0,6); p.equal(0)
     else: p.mov(3,0x200018); p.require(b"\x48\x39\xd8")
     p.finish(); return p
 
