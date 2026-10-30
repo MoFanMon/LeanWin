@@ -1,38 +1,38 @@
 {
-  "date": "2026-10-29",
-  "tested_commit": "1fc36a46c2ed76b5901baf8de66c0372f0e32fbd",
-  "workflow_run_id": 40880700187,
-  "workflow_url": "https://github.com/MoFanMon/LeanWin/actions/runs/40880700187",
+  "date": "2026-10-30",
+  "tested_commit": "713f10d80b73313efd58d15b67e7eb7ee57a956c",
+  "workflow_run_id": 41049026736,
+  "workflow_url": "https://github.com/MoFanMon/LeanWin/actions/runs/41049026736",
   "conclusion": "success",
   "jobs": [
     {
-      "job_id": 123471113591,
-      "name": "compatibility (macos-14)",
-      "conclusion": "success",
-      "unit_tests": 124,
-      "sanitized_unit_tests": 124,
-      "mutated_execution_and_inspection_inputs": 480,
-      "smoke_backend": "leanwin",
-      "smoke_cases": 52,
-      "smoke_status": "PASS"
-    },
-    {
-      "job_id": 123471113770,
-      "name": "compatibility (ubuntu-24.04)",
-      "conclusion": "success",
-      "unit_tests": 124,
-      "sanitized_unit_tests": 124,
-      "mutated_execution_and_inspection_inputs": 480,
-      "smoke_backend": "leanwin",
-      "smoke_cases": 52,
-      "smoke_status": "PASS"
-    },
-    {
-      "job_id": 123471113787,
+      "job_id": 124040188747,
       "name": "windows-native",
       "conclusion": "success",
       "smoke_backend": "native-windows",
-      "smoke_cases": 52,
+      "smoke_cases": 68,
+      "smoke_status": "PASS"
+    },
+    {
+      "job_id": 124040188908,
+      "name": "compatibility (macos-14)",
+      "conclusion": "success",
+      "unit_tests": 137,
+      "sanitized_unit_tests": 137,
+      "mutated_execution_and_inspection_inputs": 600,
+      "smoke_backend": "leanwin",
+      "smoke_cases": 68,
+      "smoke_status": "PASS"
+    },
+    {
+      "job_id": 124040188997,
+      "name": "compatibility (ubuntu-24.04)",
+      "conclusion": "success",
+      "unit_tests": 137,
+      "sanitized_unit_tests": 137,
+      "mutated_execution_and_inspection_inputs": 600,
+      "smoke_backend": "leanwin",
+      "smoke_cases": 68,
       "smoke_status": "PASS"
     }
   ],

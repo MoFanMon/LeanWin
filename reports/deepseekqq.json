@@ -46,5 +46,6 @@
   "previous_deferred_instruction_count": 12100,
   "visible_installer_window": false,
   "installation_completed": false,
-  "note": "Startup passed common-control class initialization, byte-immediate writes, REP RET, SCAS and NOT. Only class metadata exists; no common-control instances, installer GUI, installation, or full atomic-operation compatibility is claimed."
+  "note": "Startup passed common-control class initialization, byte-immediate writes, REP RET, SCAS and NOT. Only class metadata exists; no common-control instances, installer GUI, installation, or full atomic-operation compatibility is claimed.",
+  "tested_runtime_commit": "713f10d80b73313efd58d15b67e7eb7ee57a956c"
 }

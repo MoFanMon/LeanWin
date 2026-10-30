@@ -7,7 +7,7 @@
 - 新增 InitCommonControls / Ex 和窗口类注册、查询、注销共 7 个接口，入口总数为 89；COMCTL32 的模块和导出解析独立于 KERNEL32 / USER32。
 - 窗口类按进程保存，支持 32 / 64 位结构、名称副本、ASCII 大小写查询、atom、重复和错误输入处理；字符串只读区按需分配。这里只登记元数据，尚无控件实例、窗口或消息分发。
 - 补充字节立即数赋值（含高字节和 REX 选择）、REP RET、SCAS / REPE / REPNE、NOT；扫描检查完整操作数和全局指令预算。
-- 普通版与 ASan/UBSan 版各 137 项测试；新增 120 个变异窗口类结构输入，合计 600 个变异输入。Windows 原生对照扩展为 68 项，当前跨系统结果见 reports/ci.json。
+- 普通版与 ASan/UBSan 版各 137 项测试；新增 120 个变异窗口类结构输入，合计 600 个变异输入。Windows 原生对照扩展为 68 项；macOS、Linux、Windows 三平台 CI 全部通过，准确测试提交与结果见 reports/ci.json。
 - DeepSeekQQ 诊断模式越过 InitCommonControls，执行到 12,711 条指令、32 次接口调用，当前停在 LOCK INC（0x407fc2）；尚未出现安装界面或完成安装。
 
 ## 2026-10-29

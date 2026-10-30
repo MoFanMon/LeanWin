@@ -132,6 +132,46 @@
       "exit_code": 0
     },
     {
+      "name": "common-classes32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "common-classes-ex32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "class-lifecycle32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "class-lifecycle-ex32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "byte-immediate32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "rep-ret32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "scan32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "not32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
       "name": "console64",
       "status": "PASS",
       "exit_code": 37
@@ -258,6 +298,46 @@
     },
     {
       "name": "x87-env1664",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "common-classes64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "common-classes-ex64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "class-lifecycle64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "class-lifecycle-ex64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "byte-immediate64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "rep-ret64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "scan64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "not64",
       "status": "PASS",
       "exit_code": 0
     }
