@@ -140,10 +140,10 @@ def register_exchange_probe(bits=64):
     p.mov(0,7); p.mov(1,11); p.mov(2,9); p.emit(b'\x0f\xb1\xd1')
     p.require(b'',0x84); p.equal(11); p.copy(0,1); p.equal(11)
     if bits==64:
-        # CMPXCHG r32 performs a write cycle on both success and failure.
+        # Failed CMPXCHG loads EAX but leaves the register destination intact.
         p.mov(0,0x1122334400000007); p.mov(1,0xaabbccdd0000000b); p.mov(2,9)
         p.emit(b'\x0f\xb1\xd1'); p.mov(2,11); p.require(b'\x48\x39\xd0')
-        p.copy(0,1); p.require(b'\x48\x39\xd0')
+        p.copy(0,1); p.mov(2,0xaabbccdd0000000b); p.require(b'\x48\x39\xd0')
     p.finish(); return p
 
 

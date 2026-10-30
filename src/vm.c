@@ -437,7 +437,12 @@ static bool atomic_instruction(vm *v, unsigned opcode, unsigned rex, unsigned bi
         uint64_t accumulator=get_reg(v,0,bits);
         (void)alu(v,accumulator,old,bits,7);
         if (accumulator==old) result=source;
-        else set_reg(v,0,old,bits);
+        else {
+            set_reg(v,0,old,bits);
+            /* Only a memory destination receives the failed write cycle. A
+               register target retains its full value, including high bits. */
+            if (op.reg) return true;
+        }
     }
     if (op.reg) atomic_set_reg(v,op.index,result,bits,has_rex);
     else write_mem(v,address,result,bits/8);

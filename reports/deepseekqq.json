@@ -1,6 +1,6 @@
 {
   "date": "2026-10-30",
-  "generated_at_utc": "2026-10-30T12:08:03.082598+00:00",
+  "generated_at_utc": "2026-10-30T12:13:10.710168+00:00",
   "file": "DeepSeekQQ-Setup.exe",
   "sha256": "a042a1878d94b5359df91acf1d3866ae601a64ce6f22ec9d0379721ba3836847",
   "status": "blocked",
@@ -29,7 +29,7 @@
         "guest_exit_code": 0,
         "instructions": 13193,
         "api_calls": 32,
-        "elapsed_ms": 0.652,
+        "elapsed_ms": 1.911,
         "guest_memory_bytes": 3489816,
         "host_peak_rss_bytes": 3538944,
         "status": "error",
