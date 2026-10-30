@@ -23,6 +23,9 @@ from test_locale import locale_probe, locale_thread_probe, locale_info_probe, or
 from test_fpu import fpu_control_probe, fpu_thread_probe, fpu_environment_probe
 from test_classes import common_classes_probe, class_lifecycle_probe
 from test_cpu_startup import byte_immediate_probe, repeat_return_probe, scan_probe, not_probe
+from test_atomic import (atomic_arithmetic_probe, atomic_immediate_probe, atomic_exchange_probe,
+                         atomic_thread_probe, short_exchange_probe, atomic_flags_probe, register_exchange_probe,
+                         atomic_prefix_probe)
 
 
 def tls_probe(bits):
@@ -104,7 +107,15 @@ def main():
                      ("byte-immediate", byte_immediate_probe(bits), 0, b""),
                      ("rep-ret", repeat_return_probe(bits), 0, b""),
                      ("scan", scan_probe(bits), 0, b""),
-                     ("not", not_probe(bits), 0, b"")]
+                     ("not", not_probe(bits), 0, b""),
+                     ("atomic-arithmetic", atomic_arithmetic_probe(bits), 0, b""),
+                     ("atomic-immediate", atomic_immediate_probe(bits), 0, b""),
+                     ("atomic-exchange", atomic_exchange_probe(bits), 0, b""),
+                     ("atomic-thread", atomic_thread_probe(bits), 0, b""),
+                     ("short-exchange", short_exchange_probe(bits), 0, b""),
+                     ("atomic-flags", atomic_flags_probe(bits), 0, b""),
+                     ("register-exchange", register_exchange_probe(bits), 0, b""),
+                     ("atomic-prefix", atomic_prefix_probe(bits), 0, b"")]
             for name, program, expected_exit, expected_stdout in cases:
                 folder = Path(directory) / f"{name}{bits}"
                 folder.mkdir()

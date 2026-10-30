@@ -17,6 +17,7 @@ from test_tls import TLSProgram, DATA
 from test_resources import resource_probe
 from test_fpu import fpu_environment_probe
 from test_classes import class_lifecycle_probe, class_size
+from test_atomic import atomic_mutation_probe
 
 
 def main():
@@ -127,6 +128,16 @@ def main():
                 "--max-steps","1000"],capture_output=True,env=env,timeout=3)
             if result.returncode<0 or b"AddressSanitizer" in result.stderr or b"runtime error:" in result.stderr:
                 raise RuntimeError(("class",i,result.returncode,result.stderr.decode(errors="replace")))
+        for i in range(120):
+            p=atomic_mutation_probe(32 if i%2 else 64)
+            data=p.image()
+            for _ in range(1+i%4):
+                data[0x200+p.atomic_offset+randomizer.randrange(4)]=randomizer.randrange(256)
+            path.write_bytes(data)
+            result=subprocess.run([str(binary),"run",str(path),"--root",str(folder/"drive"),
+                "--max-steps","1000"],capture_output=True,env=env,timeout=3)
+            if result.returncode<0 or b"AddressSanitizer" in result.stderr or b"runtime error:" in result.stderr:
+                raise RuntimeError(("atomic",i,result.returncode,result.stderr.decode(errors="replace")))
         # Negative-path tests capture stderr and may intentionally accept nonzero
         # exits. Sanitizer logs still make any instrumented process failure fatal.
         logs = [p for p in folder.glob("sanitizer.*") if p.stat().st_size]
@@ -140,6 +151,7 @@ def main():
               "deterministic_mutated_resource_execution_inputs": 120,
               "deterministic_mutated_x87_execution_inputs": 120,
               "deterministic_mutated_window_class_execution_inputs": 120,
+              "deterministic_mutated_atomic_execution_inputs": 120,
               "sanitizer_status": "PASS", "visible_gui_validation": "NOT AUTOMATED: compiled only",
               "native_windows_cross_validation": "NOT RUN"}
     (ROOT / "reports").mkdir(exist_ok=True)

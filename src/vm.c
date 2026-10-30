@@ -372,28 +372,117 @@ static bool fpu_instruction(vm *v, unsigned opcode, unsigned rex, bool short_for
     return false;
 }
 
+/* Atomicity is with respect to this process's cooperative guest scheduler:
+   validation, read/modify/write and register updates happen in one VM step.
+   There are no host threads or shared-memory mappings in this execution model. */
+static uint64_t atomic_reg(vm *v, unsigned reg, unsigned bits, bool rex)
+{
+    if (bits==8 && !rex && reg>=4 && reg<8) return (v->r[reg-4]>>8)&255;
+    return get_reg(v,reg,bits);
+}
+static void atomic_set_reg(vm *v, unsigned reg, uint64_t value, unsigned bits, bool rex)
+{
+    if (bits==8 && !rex && reg>=4 && reg<8)
+        v->r[reg-4]=(v->r[reg-4]&~UINT64_C(0xff00))|((value&255)<<8);
+    else set_reg(v,reg,value,bits);
+}
+static bool atomic_instruction(vm *v, unsigned opcode, unsigned rex, unsigned bits, bool locked, bool has_rex)
+{
+    enum { BINARY, IMMEDIATE, UNARY, EXCHANGE, EXCHANGE_ADD, COMPARE_EXCHANGE } kind;
+    if (opcode<=0x31 && (opcode&7)<=1) kind=BINARY;
+    else if (opcode==0x80 || opcode==0x81 || opcode==0x83) kind=IMMEDIATE;
+    else if (opcode==0xfe || opcode==0xff || opcode==0xf6 || opcode==0xf7) kind=UNARY;
+    else if (opcode==0x86 || opcode==0x87) kind=EXCHANGE;
+    else if (opcode==0x1c0 || opcode==0x1c1) kind=EXCHANGE_ADD;
+    else if (opcode==0x1b0 || opcode==0x1b1) kind=COMPARE_EXCHANGE;
+    else return false;
+    if (!(opcode&1)) bits=8;
+    unsigned reg; operand op=modrm(v,rex,&reg);
+    if (v->failed) return true;
+    unsigned operation=reg&7;
+    if ((locked && op.reg) || (kind==IMMEDIATE && operation==7) ||
+        (kind==UNARY && ((opcode>=0xfe && operation>1) || (opcode<=0xf7 && operation!=2 && operation!=3)))) {
+        fault(v,"invalid LOCK operand or operation at guest IP 0x%" PRIx64,v->origin); return true;
+    }
+    uint64_t source=0;
+    if (kind==IMMEDIATE) {
+        source=fetch(v,opcode==0x81 ? (bits==16 ? 2 : 4) : 1);
+        if (opcode==0x83) source=(uint64_t)(int64_t)(int8_t)source;
+        else if (bits==64 && opcode==0x81) source=(uint64_t)(int64_t)(int32_t)source;
+    } else if (kind!=UNARY) source=atomic_reg(v,reg,bits,has_rex);
+    if (v->failed) return true;
+    uint64_t address=0, old;
+    if (op.reg) old=atomic_reg(v,op.index,bits,has_rex);
+    else {
+        address=pointer(v,effective(v,op)+v->segment);
+        /* CMPXCHG has a write cycle even when the comparison fails. */
+        if (!access_memory(v,address,bits/8,LW_READ|LW_WRITE)) return true;
+        old=read_mem(v,address,bits/8);
+    }
+    uint64_t result=old;
+    if (kind==BINARY) result=alu(v,old,source,bits,(opcode>>3)&7);
+    else if (kind==IMMEDIATE) result=alu(v,old,source,bits,operation);
+    else if (kind==UNARY) {
+        if (opcode>=0xfe) {
+            unsigned carry=v->flags&CF;
+            result=alu(v,old,1,bits,operation ? 5 : 0);
+            v->flags=(v->flags&~CF)|carry;
+        } else if (operation==2) result=~old;
+        else result=alu(v,0,old,bits,5);
+    } else if (kind==EXCHANGE) {
+        result=source; atomic_set_reg(v,reg,old,bits,has_rex);
+    } else if (kind==EXCHANGE_ADD) {
+        result=alu(v,old,source,bits,0); atomic_set_reg(v,reg,old,bits,has_rex);
+    } else {
+        uint64_t accumulator=get_reg(v,0,bits);
+        (void)alu(v,accumulator,old,bits,7);
+        if (accumulator==old) result=source;
+        else set_reg(v,0,old,bits);
+    }
+    if (op.reg) atomic_set_reg(v,op.index,result,bits,has_rex);
+    else write_mem(v,address,result,bits/8);
+    return true;
+}
+
 static void instruction(vm *v)
 {
     v->origin = v->ip;
     v->segment = 0;
     unsigned rex = 0, last_rex = 0, bits = 32, byte = (unsigned)fetch(v, 1), prefixes = 0;
-    bool wide16 = false, repeat = false, repeat_not_equal = false;
-    while (byte == 0x66 || byte == 0xf2 || byte == 0xf3 || byte == 0x64 || byte == 0x65 || (v->word == 8 && byte >= 0x40 && byte <= 0x4f)) {
+    bool wide16 = false, repeat = false, repeat_not_equal = false, locked = false;
+    while (byte == 0xf0 || byte == 0x66 || byte == 0xf2 || byte == 0xf3 || byte == 0x64 || byte == 0x65 || (v->word == 8 && byte >= 0x40 && byte <= 0x4f)) {
         if (++prefixes > 8) { fault(v, "too many instruction prefixes"); return; }
         last_rex = byte>=0x40 && byte<=0x4f ? byte : 0;
-        if (byte == 0x66) wide16 = true;
+        if (byte == 0xf0) locked = true;
+        else if (byte == 0x66) wide16 = true;
         else if (byte == 0xf2 || byte == 0xf3) { repeat = true; repeat_not_equal = byte==0xf2; }
         else if (byte == 0x64 || byte == 0x65) {
             if ((byte == 0x64) != (v->word == 4)) { fault(v, "unsupported FS/GS segment for this architecture"); return; }
             v->segment = thread_tls_base(v);
-        } else rex = byte & 15;
+        }
         byte = (unsigned)fetch(v, 1);
     }
+    /* REX must immediately precede the opcode; legacy prefixes cancel it. */
+    rex=last_rex&15;
     bits = (rex & 8) ? 64 : wide16 ? 16 : 32;
     if (v->failed) return;
+    if (locked) {
+        unsigned opcode=byte==0x0f ? 0x100+(unsigned)fetch(v,1) : byte;
+        if (!v->failed && (repeat || !atomic_instruction(v,opcode,rex,bits,true,last_rex!=0)))
+            fault(v,"unsupported LOCK instruction at guest IP 0x%" PRIx64,v->origin);
+        return;
+    }
     if (repeat && byte!=0xae && byte!=0xaf &&
         (repeat_not_equal || (byte!=0x0f && byte!=0xa4 && byte!=0xa5 && byte!=0xaa && byte!=0xab && byte!=0xc3))) {
         fault(v, "unsupported REP instruction at guest IP 0x%" PRIx64, v->origin); return;
+    }
+    if (byte>=0x90 && byte<=0x97) {
+        unsigned reg=(byte&7)+((rex&1) ? 8 : 0);
+        if (reg) {
+            uint64_t old=get_reg(v,0,bits), other=get_reg(v,reg,bits);
+            set_reg(v,0,other,bits); set_reg(v,reg,old,bits);
+        }
+        return;
     }
     if (byte < 0x40 && ((byte & 7) == 4 || (byte & 7) == 5)) {
         unsigned width = (byte & 1) ? bits : 8, kind = (byte >> 3) & 7;
@@ -425,11 +514,12 @@ static void instruction(vm *v)
         v->flags = (v->flags & ~CF) | carry; return;
     }
     switch (byte) {
+    case 0x86: case 0x87:
+        (void)atomic_instruction(v,byte,rex,bits,false,last_rex!=0); return;
     case 0x9b: (void)fpu_wait(v); return;
     case 0xd9: case 0xdb: case 0xdd: case 0xdf:
         if (fpu_instruction(v,byte,rex,wide16)) return;
         break;
-    case 0x90: return;
     case 0xfc: v->flags &= ~DF; return;
     case 0x9c: case 0x9d: {
         unsigned width = wide16 ? 2 : v->word;
@@ -486,6 +576,9 @@ static void instruction(vm *v)
     case 0xeb: { int8_t delta = (int8_t)fetch(v, 1); v->ip = pointer(v, v->ip + delta); return; }
     case 0x0f: {
         unsigned second = (unsigned)fetch(v, 1);
+        if (!repeat && (second==0xb0 || second==0xb1 || second==0xc0 || second==0xc1)) {
+            (void)atomic_instruction(v,0x100+second,rex,bits,false,last_rex!=0); return;
+        }
         if (simd_instruction(v, second, rex, wide16, repeat)) return;
         if (repeat) break;
         if (second == 0xa2) {

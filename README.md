@@ -150,6 +150,19 @@ ReBar、IP 地址和 pager 类。User32 基础类可直接查询。v6 激活上�
 当前仅覆盖少量搬运和重排指令，CPUID 不声明完整 SSE/SSE2 支持。整数路径补充了 ADC、SBB 和无符号 DIV；
 除零和商溢出停止客体并报告错误，尚未通过 Windows SEH 分发异常。
 
+### 原子内存操作
+
+支持内存目标上的 `LOCK INC / DEC / NOT / NEG`、`LOCK ADD / ADC / SUB / SBB / AND / OR / XOR`，
+包括寄存器源和 80 / 81 / 83 立即数编码。支持 `XCHG`、`XADD`、`CMPXCHG` 的寄存器/内存形式，
+后两者可加 LOCK；内存 XCHG 自带原子语义。支持 8 / 16 / 32 / 64 位操作数（64 位仅在 x64）。
+交换指令也覆盖 `90..97` 简短编码、REX 扩展寄存器及 NOP 的寄存器保留行为。
+
+原子步骤在当前进程的客体调度器中一次完成完整范围权限检查、读写、标志和寄存器更新，
+中间不会切换客体线程；当前没有共享内存映射或并行主机线程，因此不宣称跨进程原子同步。
+比较交换即使失败也检查目标写权限；测试覆盖进位保留、溢出、旧值、别名、高字节寄存器、
+REX 顺序、RIP 相对地址、越界和多个线程累加。非法 LOCK 寄存器目标或只读指令明确报错。
+`CMPXCHG8B / 16B`、位测试原子操作、HLE / TSX 和 Windows 异常分发尚未实现。
+
 ### x87 控制状态
 
 支持 `FNINIT` / `FINIT`、`FLDCW`、`FNSTCW` / `FSTCW`、`FNSTSW` / `FSTSW`、
@@ -212,10 +225,10 @@ DeepSeekQQ 的实际导入分析与阻断原因见 [reports/deepseekqq.json](rep
 
 ## 本机验证记录
 
-2026-10-30，在 Apple Silicon macOS 上：137 项测试在普通版和 AddressSanitizer /
+2026-10-30，在 Apple Silicon macOS 上：148 项测试在普通版和 AddressSanitizer /
 UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子的变异 PE 分析输入、
 120 个变异 TLS 执行输入、120 个变异资源目录执行输入、120 个变异 x87 环境输入、
-120 个变异窗口类结构输入（合计 600 个），以及 4 个实际执行示例。
+120 个变异窗口类结构输入、120 个变异原子指令输入（合计 720 个），以及 4 个实际执行示例。
 可用 `python3 tools/sanitize.py` 重新构建并运行这些检查；结果写入
 [reports/validation.json](reports/validation.json)。
 
@@ -223,8 +236,8 @@ UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子
 控制台小示例的新进程启动与执行测量见报告中的各架构中位数；不以单次数字代替真实软件性能。
 这些数字仅对应仓库内的微型示例和本机环境，不能外推到一般 Windows 应用。
 DeepSeekQQ 安装器分析到 153 个静态导入项，其中 77 项入口名称尚未实现；严格模式首先停在
-`kernel32.dll!GetFullPathNameW`。诊断模式执行了 12,711 条指令、32 次接口调用，停在
-`LOCK INC [EAX-8]`（指令位置 `0x407fc2`）。公共控件初始化以及后续字节赋值、字符串扫描和返回路径已越过；
+`kernel32.dll!GetFullPathNameW`。诊断模式执行了 13,193 条指令、32 次接口调用，停在
+`advapi32.dll!RegOpenKeyExW`（调用位置 `0x4038c0`）。原子引用计数更新和后续寄存器交换已越过；
 尚未进入安装界面，也未验证安装器 TLS 生命周期完成。
 完整缺失清单见 [reports/deepseekqq-imports.json](reports/deepseekqq-imports.json)。
 静态导入项数量不等于完整依赖数量，也不是兼容性百分比。
@@ -239,8 +252,8 @@ python3 tools/smoke.py --runner ./build/leanwin --output reports/smoke.json
 python tools/smoke.py --output reports/windows-native.json
 ```
 
-GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 68 项原生执行检查。
-这轮增加了窗口类/公共控件和启动指令的 16 项对照用例。
+GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 84 项原生执行检查。
+原子操作、寄存器交换、线程共享计数器及前缀顺序新增 16 项对照用例。
 2026-10-30 的[窗口类与启动路径跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/41049026736)全部通过，
 准确的测试提交、任务与计数记录在 [reports/ci.json](reports/ci.json)，68 项 Windows 结果见
 [reports/windows-native.json](reports/windows-native.json)。本机 `validation.json` 仅记录本机检查，Windows 结果由独立 CI 任务提供。
@@ -261,7 +274,7 @@ Windows 接口 → POSIX 文件/进程接口
 
 1. 增加编译器生成的 Win32 测试程序，并扩展真实 Windows 上的接口语义与界面验证。
 2. 补全加载环境：PEB/TEB、进程退出通知、DLL TLS、重定位和异常；扩展现有堆与线程调度的参数语义。
-3. 补齐安装器接下来需要的 LOCK / 原子内存操作、x87 数值栈与浮点运算，再扩充 NLS 和 SIMD 覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
+3. 补齐安装器当前需要的注册表读取和加载环境，继续实现 x87 数值栈与浮点运算，扩充 NLS 和 SIMD 覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
 4. 实现真实窗口、消息循环和 GDI，再扩展通用控件、注册表、COM 与进程间协作。
 5. 以 DeepSeekQQ / Inno Setup 的导入清单建立回归目标。运行安装器之后，还需要兼容应用本体、QQ 和 NapCat 的完整依赖链。
 
