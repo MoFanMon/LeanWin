@@ -1,12 +1,12 @@
 {
-  "date": "2026-10-29",
-  "generated_at_utc": "2026-10-29T13:15:30.884586+00:00",
+  "date": "2026-10-30",
+  "generated_at_utc": "2026-10-30T11:32:56.663441+00:00",
   "file": "DeepSeekQQ-Setup.exe",
   "sha256": "a042a1878d94b5359df91acf1d3866ae601a64ce6f22ec9d0379721ba3836847",
   "status": "blocked",
   "static_import_entries": 153,
-  "known_name_entries": 75,
-  "missing_name_entries": 78,
+  "known_name_entries": 76,
+  "missing_name_entries": 77,
   "attempts": {
     "strict": {
       "host_exit_code": 65,
@@ -15,9 +15,9 @@
         "guest_exit_code": 0,
         "instructions": 0,
         "api_calls": 0,
-        "elapsed_ms": 1.944,
+        "elapsed_ms": 3.994,
         "guest_memory_bytes": 1974272,
-        "host_peak_rss_bytes": 3145728,
+        "host_peak_rss_bytes": 3162112,
         "status": "error",
         "error": "unimplemented import kernel32.dll!GetFullPathNameW"
       }
@@ -27,25 +27,24 @@
       "runtime": {
         "backend": "original-x86-interpreter",
         "guest_exit_code": 0,
-        "instructions": 12100,
-        "api_calls": 28,
-        "elapsed_ms": 0.512,
-        "guest_memory_bytes": 2048024,
-        "host_peak_rss_bytes": 3391488,
+        "instructions": 12711,
+        "api_calls": 32,
+        "elapsed_ms": 2.879,
+        "guest_memory_bytes": 3489816,
+        "host_peak_rss_bytes": 3555328,
         "status": "error",
-        "error": "called unimplemented import comctl32.dll!InitCommonControls at guest IP 0x40fc28"
+        "error": "unsupported instruction 0xf0 at guest IP 0x407fc2"
       }
     }
   },
   "first_deferred_blocker": {
-    "kind": "unimplemented-import-call",
-    "guest_ip": "0x40fc28",
-    "dll": "comctl32.dll",
-    "name": "InitCommonControls"
+    "kind": "unsupported-instruction",
+    "guest_ip": "0x407fc2",
+    "opcode": "f0 ff 40 f8",
+    "instruction": "LOCK INC dword ptr [EAX-8]"
   },
-  "previous_deferred_instruction_count": 11949,
+  "previous_deferred_instruction_count": 12100,
   "visible_installer_window": false,
   "installation_completed": false,
-  "note": "Startup passed x87 initialization and control-word setup. No complete x87 arithmetic, common controls, installer GUI or installation compatibility is claimed.",
-  "tested_runtime_commit": "1fc36a46c2ed76b5901baf8de66c0372f0e32fbd"
+  "note": "Startup passed common-control class initialization, byte-immediate writes, REP RET, SCAS and NOT. Only class metadata exists; no common-control instances, installer GUI, installation, or full atomic-operation compatibility is claimed."
 }

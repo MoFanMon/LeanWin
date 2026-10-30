@@ -21,6 +21,8 @@ from test_simd import simd_probe, aligned_simd_probe
 from test_version import condition_probe, version_probe
 from test_locale import locale_probe, locale_thread_probe, locale_info_probe, ordinal_probe, system_info_probe
 from test_fpu import fpu_control_probe, fpu_thread_probe, fpu_environment_probe
+from test_classes import common_classes_probe, class_lifecycle_probe
+from test_cpu_startup import byte_immediate_probe, repeat_return_probe, scan_probe, not_probe
 
 
 def tls_probe(bits):
@@ -94,7 +96,15 @@ def main():
                      ("x87-control", fpu_control_probe(bits), 0, b""),
                      ("x87-thread", fpu_thread_probe(bits), 0, b""),
                      ("x87-env", fpu_environment_probe(bits), 0, b""),
-                     ("x87-env16", fpu_environment_probe(bits,True), 0, b"")]
+                     ("x87-env16", fpu_environment_probe(bits,True), 0, b""),
+                     ("common-classes", common_classes_probe(bits), 0, b""),
+                     ("common-classes-ex", common_classes_probe(bits,True), 0, b""),
+                     ("class-lifecycle", class_lifecycle_probe(bits,False), 0, b""),
+                     ("class-lifecycle-ex", class_lifecycle_probe(bits), 0, b""),
+                     ("byte-immediate", byte_immediate_probe(bits), 0, b""),
+                     ("rep-ret", repeat_return_probe(bits), 0, b""),
+                     ("scan", scan_probe(bits), 0, b""),
+                     ("not", not_probe(bits), 0, b"")]
             for name, program, expected_exit, expected_stdout in cases:
                 folder = Path(directory) / f"{name}{bits}"
                 folder.mkdir()

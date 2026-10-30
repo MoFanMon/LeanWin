@@ -7,6 +7,7 @@
 #include "version.h"
 #include "locale.h"
 #include "fpu.h"
+#include "classes.h"
 #include <ctype.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -68,6 +69,7 @@ typedef struct {
     unsigned trap_count, trap_capacity;
     lw_memory *memory;
     lw_processes *processes;
+    lw_classes *classes;
     uint8_t *parameters;
     uint64_t command_line, module_path;
     size_t module_length;
@@ -95,7 +97,9 @@ typedef struct {
     char *error; size_t error_size;
 } vm;
 typedef struct { bool reg, relative; unsigned index; uint64_t address; } operand;
-typedef struct { const char *name; unsigned argc; bool user; } api;
+enum { DLL_KERNEL=0x200, DLL_USER, DLL_COMMON };
+static const char *const module_names[] = {"KERNEL32.dll", "USER32.dll", "COMCTL32.dll"};
+typedef struct { const char *name; unsigned argc, module; } api;
 enum { EXIT_PROCESS, GET_STD_HANDLE, WRITE_FILE, READ_FILE, CREATE_FILE, CLOSE_HANDLE,
        GET_LAST_ERROR, SET_LAST_ERROR, GET_TICK_COUNT64, GET_PROCESS_ID, GET_FILE_SIZE,
        GET_MODULE_HANDLE, LOAD_LIBRARY, GET_PROC_ADDRESS, MESSAGE_BOX,
@@ -112,37 +116,41 @@ enum { EXIT_PROCESS, GET_STD_HANDLE, WRITE_FILE, READ_FILE, CREATE_FILE, CLOSE_H
        PERFORMANCE_FREQUENCY, PERFORMANCE_COUNTER, VERSION_CONDITION, VERIFY_VERSION,
        GET_VERSION, GET_VERSION_EX, SET_THREAD_LOCALE, GET_THREAD_LOCALE, VALID_LOCALE,
        USER_LCID, SYSTEM_LCID, USER_LANG, SYSTEM_LANG, USER_UI_LANG, SYSTEM_UI_LANG,
-       LOCALE_INFO, COMPARE_ORDINAL, MAP_STRING, SYSTEM_INFO, API_COUNT };
+       LOCALE_INFO, COMPARE_ORDINAL, MAP_STRING, SYSTEM_INFO, COMMON_INIT, COMMON_INIT_EX,
+       CLASS_REGISTER, CLASS_REGISTER_EX, CLASS_INFO, CLASS_INFO_EX, CLASS_UNREGISTER, API_COUNT };
 static const api apis[] = {
-    {"ExitProcess",1,false}, {"GetStdHandle",1,false}, {"WriteFile",5,false},
-    {"ReadFile",5,false}, {"CreateFileW",7,false}, {"CloseHandle",1,false},
-    {"GetLastError",0,false}, {"SetLastError",1,false}, {"GetTickCount64",0,false},
-    {"GetCurrentProcessId",0,false}, {"GetFileSizeEx",2,false},
-    {"GetModuleHandleW",1,false}, {"LoadLibraryW",1,false},
-    {"GetProcAddress",2,false}, {"MessageBoxW",4,true},
-    {"GetACP",0,false}, {"GetCPInfo",2,false}, {"GetCPInfoExW",3,false},
-    {"MultiByteToWideChar",6,false}, {"WideCharToMultiByte",8,false},
-    {"GetProcessHeap",0,false}, {"HeapCreate",3,false}, {"HeapDestroy",1,false},
-    {"HeapAlloc",3,false}, {"HeapFree",3,false}, {"LocalAlloc",2,false}, {"LocalFree",1,false},
-    {"VirtualAlloc",4,false}, {"VirtualFree",3,false}, {"VirtualProtect",4,false},
-    {"VirtualQuery",3,false}, {"VirtualQueryEx",4,false}, {"FindResourceW",3,false},
-    {"SizeofResource",2,false}, {"LoadResource",2,false}, {"LockResource",1,false},
-    {"GetCurrentProcess",0,false}, {"GetExitCodeProcess",2,false}, {"GetCurrentThread",0,false},
-    {"GetCurrentThreadId",0,false}, {"CreateThread",6,false}, {"ExitThread",1,false},
-    {"GetExitCodeThread",2,false}, {"ResumeThread",1,false}, {"SuspendThread",1,false},
-    {"WaitForSingleObject",2,false}, {"CreateEventW",4,false}, {"SetEvent",1,false},
-    {"ResetEvent",1,false}, {"Sleep",1,false}, {"SwitchToThread",0,false},
-    {"TlsAlloc",0,false}, {"TlsFree",1,false}, {"TlsGetValue",1,false}, {"TlsSetValue",2,false},
-    {"InitializeCriticalSection",1,false}, {"EnterCriticalSection",1,false},
-    {"LeaveCriticalSection",1,false}, {"DeleteCriticalSection",1,false},
-    {"CreateProcessW",10,false}, {"GetCommandLineW",0,false}, {"GetModuleFileNameW",3,false},
-    {"GetStartupInfoW",1,false}, {"QueryPerformanceFrequency",1,false}, {"QueryPerformanceCounter",1,false},
-    {"VerSetConditionMask",3,false}, {"VerifyVersionInfoW",3,false}, {"GetVersion",0,false}, {"GetVersionExW",1,false},
-    {"SetThreadLocale",1,false}, {"GetThreadLocale",0,false}, {"IsValidLocale",2,false},
-    {"GetUserDefaultLCID",0,false}, {"GetSystemDefaultLCID",0,false},
-    {"GetUserDefaultLangID",0,false}, {"GetSystemDefaultLangID",0,false},
-    {"GetUserDefaultUILanguage",0,false}, {"GetSystemDefaultUILanguage",0,false},
-    {"GetLocaleInfoW",4,false}, {"CompareStringOrdinal",5,false}, {"LCMapStringW",6,false}, {"GetSystemInfo",1,false}
+    {"ExitProcess",1,DLL_KERNEL}, {"GetStdHandle",1,DLL_KERNEL}, {"WriteFile",5,DLL_KERNEL},
+    {"ReadFile",5,DLL_KERNEL}, {"CreateFileW",7,DLL_KERNEL}, {"CloseHandle",1,DLL_KERNEL},
+    {"GetLastError",0,DLL_KERNEL}, {"SetLastError",1,DLL_KERNEL}, {"GetTickCount64",0,DLL_KERNEL},
+    {"GetCurrentProcessId",0,DLL_KERNEL}, {"GetFileSizeEx",2,DLL_KERNEL},
+    {"GetModuleHandleW",1,DLL_KERNEL}, {"LoadLibraryW",1,DLL_KERNEL},
+    {"GetProcAddress",2,DLL_KERNEL}, {"MessageBoxW",4,DLL_USER},
+    {"GetACP",0,DLL_KERNEL}, {"GetCPInfo",2,DLL_KERNEL}, {"GetCPInfoExW",3,DLL_KERNEL},
+    {"MultiByteToWideChar",6,DLL_KERNEL}, {"WideCharToMultiByte",8,DLL_KERNEL},
+    {"GetProcessHeap",0,DLL_KERNEL}, {"HeapCreate",3,DLL_KERNEL}, {"HeapDestroy",1,DLL_KERNEL},
+    {"HeapAlloc",3,DLL_KERNEL}, {"HeapFree",3,DLL_KERNEL}, {"LocalAlloc",2,DLL_KERNEL}, {"LocalFree",1,DLL_KERNEL},
+    {"VirtualAlloc",4,DLL_KERNEL}, {"VirtualFree",3,DLL_KERNEL}, {"VirtualProtect",4,DLL_KERNEL},
+    {"VirtualQuery",3,DLL_KERNEL}, {"VirtualQueryEx",4,DLL_KERNEL}, {"FindResourceW",3,DLL_KERNEL},
+    {"SizeofResource",2,DLL_KERNEL}, {"LoadResource",2,DLL_KERNEL}, {"LockResource",1,DLL_KERNEL},
+    {"GetCurrentProcess",0,DLL_KERNEL}, {"GetExitCodeProcess",2,DLL_KERNEL}, {"GetCurrentThread",0,DLL_KERNEL},
+    {"GetCurrentThreadId",0,DLL_KERNEL}, {"CreateThread",6,DLL_KERNEL}, {"ExitThread",1,DLL_KERNEL},
+    {"GetExitCodeThread",2,DLL_KERNEL}, {"ResumeThread",1,DLL_KERNEL}, {"SuspendThread",1,DLL_KERNEL},
+    {"WaitForSingleObject",2,DLL_KERNEL}, {"CreateEventW",4,DLL_KERNEL}, {"SetEvent",1,DLL_KERNEL},
+    {"ResetEvent",1,DLL_KERNEL}, {"Sleep",1,DLL_KERNEL}, {"SwitchToThread",0,DLL_KERNEL},
+    {"TlsAlloc",0,DLL_KERNEL}, {"TlsFree",1,DLL_KERNEL}, {"TlsGetValue",1,DLL_KERNEL}, {"TlsSetValue",2,DLL_KERNEL},
+    {"InitializeCriticalSection",1,DLL_KERNEL}, {"EnterCriticalSection",1,DLL_KERNEL},
+    {"LeaveCriticalSection",1,DLL_KERNEL}, {"DeleteCriticalSection",1,DLL_KERNEL},
+    {"CreateProcessW",10,DLL_KERNEL}, {"GetCommandLineW",0,DLL_KERNEL}, {"GetModuleFileNameW",3,DLL_KERNEL},
+    {"GetStartupInfoW",1,DLL_KERNEL}, {"QueryPerformanceFrequency",1,DLL_KERNEL}, {"QueryPerformanceCounter",1,DLL_KERNEL},
+    {"VerSetConditionMask",3,DLL_KERNEL}, {"VerifyVersionInfoW",3,DLL_KERNEL}, {"GetVersion",0,DLL_KERNEL}, {"GetVersionExW",1,DLL_KERNEL},
+    {"SetThreadLocale",1,DLL_KERNEL}, {"GetThreadLocale",0,DLL_KERNEL}, {"IsValidLocale",2,DLL_KERNEL},
+    {"GetUserDefaultLCID",0,DLL_KERNEL}, {"GetSystemDefaultLCID",0,DLL_KERNEL},
+    {"GetUserDefaultLangID",0,DLL_KERNEL}, {"GetSystemDefaultLangID",0,DLL_KERNEL},
+    {"GetUserDefaultUILanguage",0,DLL_KERNEL}, {"GetSystemDefaultUILanguage",0,DLL_KERNEL},
+    {"GetLocaleInfoW",4,DLL_KERNEL}, {"CompareStringOrdinal",5,DLL_KERNEL}, {"LCMapStringW",6,DLL_KERNEL}, {"GetSystemInfo",1,DLL_KERNEL},
+    {"InitCommonControls",0,DLL_COMMON}, {"InitCommonControlsEx",1,DLL_COMMON},
+    {"RegisterClassW",1,DLL_USER}, {"RegisterClassExW",1,DLL_USER},
+    {"GetClassInfoW",3,DLL_USER}, {"GetClassInfoExW",3,DLL_USER}, {"UnregisterClassW",2,DLL_USER}
 };
 static uint64_t create_thread(vm *, uint64_t *);
 static bool executable_address(vm *, uint64_t);
@@ -368,12 +376,13 @@ static void instruction(vm *v)
 {
     v->origin = v->ip;
     v->segment = 0;
-    unsigned rex = 0, bits = 32, byte = (unsigned)fetch(v, 1), prefixes = 0;
-    bool wide16 = false, repeat = false;
-    while (byte == 0x66 || byte == 0xf3 || byte == 0x64 || byte == 0x65 || (v->word == 8 && byte >= 0x40 && byte <= 0x4f)) {
+    unsigned rex = 0, last_rex = 0, bits = 32, byte = (unsigned)fetch(v, 1), prefixes = 0;
+    bool wide16 = false, repeat = false, repeat_not_equal = false;
+    while (byte == 0x66 || byte == 0xf2 || byte == 0xf3 || byte == 0x64 || byte == 0x65 || (v->word == 8 && byte >= 0x40 && byte <= 0x4f)) {
         if (++prefixes > 8) { fault(v, "too many instruction prefixes"); return; }
+        last_rex = byte>=0x40 && byte<=0x4f ? byte : 0;
         if (byte == 0x66) wide16 = true;
-        else if (byte == 0xf3) repeat = true;
+        else if (byte == 0xf2 || byte == 0xf3) { repeat = true; repeat_not_equal = byte==0xf2; }
         else if (byte == 0x64 || byte == 0x65) {
             if ((byte == 0x64) != (v->word == 4)) { fault(v, "unsupported FS/GS segment for this architecture"); return; }
             v->segment = thread_tls_base(v);
@@ -382,13 +391,26 @@ static void instruction(vm *v)
     }
     bits = (rex & 8) ? 64 : wide16 ? 16 : 32;
     if (v->failed) return;
-    if (repeat && byte != 0x0f && byte != 0xa4 && byte != 0xa5 && byte != 0xaa && byte != 0xab) { fault(v, "unsupported REP instruction at guest IP 0x%" PRIx64, v->origin); return; }
+    if (repeat && byte!=0xae && byte!=0xaf &&
+        (repeat_not_equal || (byte!=0x0f && byte!=0xa4 && byte!=0xa5 && byte!=0xaa && byte!=0xab && byte!=0xc3))) {
+        fault(v, "unsupported REP instruction at guest IP 0x%" PRIx64, v->origin); return;
+    }
     if (byte < 0x40 && ((byte & 7) == 4 || (byte & 7) == 5)) {
         unsigned width = (byte & 1) ? bits : 8, kind = (byte >> 3) & 7;
         uint64_t value = fetch(v, width == 64 ? 4 : width/8);
         if (width == 64) value = (uint64_t)(int64_t)(int32_t)value;
         uint64_t result = alu(v, get_reg(v, 0, width), value, width, kind);
         if (kind != 7) set_reg(v, 0, result, width);
+        return;
+    }
+    if (byte >= 0xb0 && byte <= 0xb7) {
+        unsigned code=byte & 7;
+        uint64_t value=fetch(v,1);
+        if (v->failed) return;
+        if (code>=4 && !last_rex) {
+            unsigned reg=code-4;
+            v->r[reg]=(v->r[reg] & ~UINT64_C(0xff00)) | (value<<8);
+        } else set_reg(v,code+((last_rex & 1) ? 8 : 0),value,8);
         return;
     }
     if (byte >= 0xb8 && byte <= 0xbf) {
@@ -431,6 +453,20 @@ static void instruction(vm *v)
         if (!store) v->r[6] = pointer(v, v->r[6]+(uint64_t)step);
         v->r[7] = pointer(v, v->r[7]+(uint64_t)step);
         if (repeat) { v->r[1] = pointer(v, v->r[1]-1); if (v->r[1]) v->ip = v->origin; }
+        return;
+    }
+    case 0xae: case 0xaf: {
+        if (repeat && !pointer(v,v->r[1])) return;
+        unsigned width=byte==0xae ? 1 : bits/8;
+        uint64_t value=read_mem(v,pointer(v,v->r[7]),width);
+        if (v->failed) return;
+        (void)alu(v,get_reg(v,0,width*8),value,width*8,7);
+        int64_t step=(v->flags & DF) ? -(int64_t)width : width;
+        v->r[7]=pointer(v,v->r[7]+(uint64_t)step);
+        if (repeat) {
+            v->r[1]=pointer(v,v->r[1]-1);
+            if (v->r[1] && (((v->flags & ZF)!=0)!=repeat_not_equal)) v->ip=v->origin;
+        }
         return;
     }
     case 0xa0: case 0xa1: case 0xa2: case 0xa3: {
@@ -558,6 +594,15 @@ static void instruction(vm *v)
             break;
         }
         if (byte == 0xf6 || byte == 0xf7) {
+            if ((reg & 7)==2) {
+                unsigned width=byte==0xf6 ? 8 : bits;
+                if (width==8 && op.reg && op.index>=4 && !rex) {
+                    fault(v,"legacy high-byte registers are not implemented for NOT"); return;
+                }
+                uint64_t value=get_operand(v,op,width);
+                if (!v->failed) set_operand(v,op,~value,width);
+                return;
+            }
             if (byte==0xf7 && (reg & 7)==6) {
                 uint64_t divisor=get_operand(v,op,bits), high=get_reg(v,2,bits), low=get_reg(v,0,bits);
                 if (v->failed) return;
@@ -611,13 +656,14 @@ static void instruction(vm *v)
 
 static int module(const char *name)
 {
-    if (!strcasecmp(name, "kernel32.dll") || !strcasecmp(name, "kernelbase.dll")) return 0x200;
-    if (!strcasecmp(name, "user32.dll")) return 0x201;
+    if (!strcasecmp(name, "kernel32.dll") || !strcasecmp(name, "kernelbase.dll")) return DLL_KERNEL;
+    if (!strcasecmp(name, "user32.dll")) return DLL_USER;
+    if (!strcasecmp(name, "comctl32.dll")) return DLL_COMMON;
     return 0;
 }
 static int api_index(int mod, const char *name)
 {
-    for (int i = 0; i < API_COUNT; i++) if ((mod == 0x201) == apis[i].user && !strcmp(name, apis[i].name)) return i;
+    for (int i = 0; i < API_COUNT; i++) if ((unsigned)mod == apis[i].module && !strcmp(name, apis[i].name)) return i;
     return -1;
 }
 static int bind_import(const lw_import *item, void *opaque, char *e, size_t en)
@@ -860,6 +906,108 @@ static uint16_t ascii_case(uint16_t c, bool upper)
     if (!upper && c>='A' && c<='Z') return c+32;
     return c;
 }
+/* Class names use a bounded ASCII profile; never apply the host locale. */
+static bool class_name(vm *v, uint64_t address, char name[256], uint16_t *atom)
+{
+    *atom=0; name[0]='\0';
+    if (address<=0xffff) {
+        if (!address) { v->last_error=87; return false; }
+        *atom=(uint16_t)address; return true;
+    }
+    for (unsigned i=0; i<256; i++) {
+        uint16_t c=(uint16_t)read_mem(v,address+i*2,2);
+        if (v->failed) return false;
+        if (c>=128) { v->last_error=50; return false; }
+        name[i]=(char)c;
+        if (!c) { if (!i) { v->last_error=87; return false; } return true; }
+    }
+    v->last_error=87; return false;
+}
+static bool prepare_classes(vm *v)
+{
+    if (v->classes) return true;
+    v->classes=lw_classes_create();
+    if (!v->classes) { fault(v,"cannot allocate window-class registry"); return false; }
+    if (!lw_memory_map(v->memory,LW_CLASS_BASE,LW_CLASS_BYTES,lw_classes_strings(v->classes),2,0x20000)) {
+        fault(v,"cannot map window-class strings"); return false;
+    }
+    return true;
+}
+static uint64_t class_api(vm *v, int id, uint64_t *a)
+{
+    if (!prepare_classes(v)) return 0;
+    if (id==COMMON_INIT || id==COMMON_INIT_EX) {
+        uint32_t flags=0xff;
+        if (id==COMMON_INIT_EX) {
+            if (!a[0]) { v->last_error=87; return 0; }
+            if (!access_memory(v,a[0],8,LW_READ)) return 0;
+            if (read_mem(v,a[0],4)!=8) { v->last_error=87; return 0; }
+            flags=(uint32_t)read_mem(v,a[0]+4,4);
+        }
+        return lw_classes_common(v->classes,flags,&v->last_error);
+    }
+    bool registering=id==CLASS_REGISTER || id==CLASS_REGISTER_EX;
+    bool extended=id==CLASS_REGISTER_EX || id==CLASS_INFO_EX;
+    unsigned size=extended ? (v->word==8 ? 80 : 48) : (v->word==8 ? 72 : 40);
+    unsigned proc_offset=extended || v->word==8 ? 8 : 4;
+    unsigned extra_offset=proc_offset+v->word, instance_offset=extra_offset+8;
+    if (registering) {
+        if (!a[0]) { v->last_error=87; return 0; }
+        if (!access_memory(v,a[0],size,LW_READ)) return 0;
+        if (extended && read_mem(v,a[0],4)!=size) { v->last_error=87; return 0; }
+        lw_window_class value={0}; uint16_t atom;
+        value.style=(uint32_t)read_mem(v,a[0]+(extended ? 4 : 0),4);
+        value.procedure=read_mem(v,a[0]+proc_offset,v->word);
+        value.class_extra=(int32_t)read_mem(v,a[0]+extra_offset,4);
+        value.window_extra=(int32_t)read_mem(v,a[0]+extra_offset+4,4);
+        value.instance=read_mem(v,a[0]+instance_offset,v->word);
+        value.icon=read_mem(v,a[0]+instance_offset+v->word,v->word);
+        value.cursor=read_mem(v,a[0]+instance_offset+2*v->word,v->word);
+        value.background=read_mem(v,a[0]+instance_offset+3*v->word,v->word);
+        value.menu=read_mem(v,a[0]+instance_offset+4*v->word,v->word);
+        uint64_t name=read_mem(v,a[0]+instance_offset+5*v->word,v->word);
+        if (extended) value.small_icon=read_mem(v,a[0]+instance_offset+6*v->word,v->word);
+        if (!class_name(v,name,value.name,&atom)) return 0;
+        if (atom || value.class_extra<0 || value.window_extra<0 || !executable_address(v,value.procedure)) {
+            v->last_error=87; return 0;
+        }
+        if (value.instance!=v->pe->image_base || (value.style & 0x4000) ||
+            value.class_extra>4096 || value.window_extra>4096 || value.icon || value.cursor || value.small_icon || value.background>31) {
+            v->last_error=50; return 0;
+        }
+        uint8_t menu[512]; size_t menu_bytes=0;
+        if (value.menu>0xffff) {
+            for (unsigned i=0; i<256; i++) {
+                uint16_t c=(uint16_t)read_mem(v,value.menu+i*2,2);
+                if (v->failed) return 0;
+                menu[i*2]=(uint8_t)c; menu[i*2+1]=(uint8_t)(c>>8);
+                if (!c) { menu_bytes=(i+1)*2; break; }
+            }
+            if (!menu_bytes) { v->last_error=50; return 0; }
+        }
+        return lw_classes_register(v->classes,&value,menu,menu_bytes,&v->last_error);
+    }
+    char name[256]; uint16_t atom;
+    uint64_t instance=id==CLASS_UNREGISTER ? a[1] : a[0];
+    if (!class_name(v,a[id==CLASS_UNREGISTER ? 0 : 1],name,&atom)) return 0;
+    const lw_window_class *value=lw_classes_find(v->classes,instance,name,atom);
+    if (!value) { v->last_error=1411; return 0; }
+    if (id==CLASS_UNREGISTER) return lw_classes_unregister(v->classes,value,&v->last_error);
+    if (!a[2]) { v->last_error=87; return 0; }
+    if (extended && read_mem(v,a[2],4)!=size) { v->last_error=87; return 0; }
+    uint8_t *out=memory(v,a[2],size);
+    if (!out) return 0;
+    memset(out,0,size);
+    if (extended) write_mem(v,a[2],size,4);
+    write_mem(v,a[2]+(extended ? 4 : 0),value->style,4);
+    write_mem(v,a[2]+proc_offset,value->procedure,v->word);
+    write_mem(v,a[2]+extra_offset,(uint32_t)value->class_extra,4);
+    write_mem(v,a[2]+extra_offset+4,(uint32_t)value->window_extra,4);
+    const uint64_t fields[]={value->instance,value->icon,value->cursor,value->background,value->menu,value->name_address,value->small_icon};
+    for (unsigned i=0; i<(extended ? 7U : 6U); i++) write_mem(v,a[2]+instance_offset+i*v->word,fields[i],v->word);
+    return 1;
+}
+
 static uint64_t dispatch(vm *v, int id, uint64_t *a)
 {
     switch (id) {
@@ -1255,7 +1403,7 @@ static uint64_t dispatch(vm *v, int id, uint64_t *a)
         return (uint64_t)mod;
     }
     case GET_PROC_ADDRESS: {
-        if ((a[0] != 0x200 && a[0] != 0x201) || a[1] <= 0xffff) { v->last_error = 127; return 0; }
+        if ((a[0] < DLL_KERNEL || a[0] > DLL_COMMON) || a[1] <= 0xffff) { v->last_error = 127; return 0; }
         char name[260]; bool ended = false;
         for (unsigned i = 0; i < sizeof(name); i++) {
             name[i] = (char)read_mem(v, a[1] + i, 1);
@@ -1266,6 +1414,8 @@ static uint64_t dispatch(vm *v, int id, uint64_t *a)
         if (index < 0) { v->last_error = 127; return 0; }
         return API_BASE + (uint64_t)(index + 1) * 16;
     }
+    case COMMON_INIT: case COMMON_INIT_EX: case CLASS_REGISTER: case CLASS_REGISTER_EX:
+    case CLASS_INFO: case CLASS_INFO_EX: case CLASS_UNREGISTER: return class_api(v,id,a);
     case MESSAGE_BOX: {
         if (a[0] || a[3]) { v->last_error = 50; return 0; }
         char text[16384] = "", title[16384] = "";
@@ -1404,6 +1554,8 @@ static void execute(vm *v, uint64_t budget)
             else fault(v, "called unimplemented import %s!%s at guest IP 0x%" PRIx64, item->dll, item->name, v->origin);
         } else if (v->ip > API_BASE && v->ip <= API_BASE + API_COUNT * 16 && (v->ip - API_BASE) % 16 == 0)
             call_api(v, (int)((v->ip - API_BASE) / 16) - 1);
+        else if (v->ip > LW_CLASS_PROC_BASE && v->ip <= LW_CLASS_PROC_BASE+LW_CLASS_LIMIT*16)
+            fault(v, "built-in control window procedure is not implemented at guest IP 0x%" PRIx64, v->origin);
         else { v->instructions++; instruction(v); }
     }
 }
@@ -1506,7 +1658,7 @@ int lw_run(const lw_pe *pe, const lw_run_options *options, lw_result *out, char 
     }
     if (pe->image_size > 64 * 1024 * 1024 || pe->image_base > UINT64_MAX - pe->image_size ||
         pe->image_base + pe->image_size > mask(pe->bits) ||
-        (pe->image_base < PARAMETERS_BASE + PARAMETERS_SIZE && pe->image_base + pe->image_size > STACK_BASE) ||
+        (pe->image_base < LW_CLASS_BASE + LW_CLASS_BYTES && pe->image_base + pe->image_size > STACK_BASE) ||
         (pe->image_base < RETURN_ADDRESS + 16 && pe->image_base + pe->image_size > TRAP_BASE)) {
         fault(&v, "guest image size or address conflicts with prototype limits"); goto cleanup;
     }
@@ -1550,6 +1702,7 @@ int lw_run(const lw_pe *pe, const lw_run_options *options, lw_result *out, char 
     schedule(&v, options->budget);
 cleanup:
     lw_processes_destroy(v.processes);
+    lw_classes_destroy(v.classes);
     for (unsigned i = 0; i < 64; i++) if (v.files[i] >= 0) close(v.files[i]);
     if (v.root >= 0) close(v.root);
     out->guest_memory_bytes = lw_memory_size(v.memory);
@@ -1574,7 +1727,7 @@ void lw_capabilities(FILE *out)
     fputs("{\"backend\":\"original-x86-interpreter\",\"architectures\":[\"x86\",\"x86_64\"],\"interfaces\":[", out);
     for (unsigned i = 0; i < API_COUNT; i++) {
         if (i) fputc(',', out);
-        fprintf(out, "{\"dll\":\"%s\",\"name\":\"%s\",\"arguments\":%u}", apis[i].user ? "USER32.dll" : "KERNEL32.dll", apis[i].name, apis[i].argc);
+        fprintf(out, "{\"dll\":\"%s\",\"name\":\"%s\",\"arguments\":%u}", module_names[apis[i].module-DLL_KERNEL], apis[i].name, apis[i].argc);
     }
     fprintf(out, "],\"ansi_code_page\":%u}\n", LW_ANSI_CODE_PAGE);
 }

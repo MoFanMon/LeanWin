@@ -4,8 +4,8 @@
   "format": "PE32",
   "architecture": "x86",
   "static_import_entries": 153,
-  "supported_import_entries": 75,
-  "missing_import_entries": 78,
+  "supported_import_entries": 76,
+  "missing_import_entries": 77,
   "supported_imports": [
     {
       "dll": "kernel32.dll",
@@ -378,6 +378,11 @@
       "delayed": false
     },
     {
+      "dll": "comctl32.dll",
+      "symbol": "InitCommonControls",
+      "delayed": false
+    },
+    {
       "dll": "user32.dll",
       "symbol": "MessageBoxW",
       "delayed": false
@@ -537,11 +542,6 @@
     {
       "dll": "kernel32.dll",
       "symbol": "RemoveDirectoryW",
-      "delayed": false
-    },
-    {
-      "dll": "comctl32.dll",
-      "symbol": "InitCommonControls",
       "delayed": false
     },
     {

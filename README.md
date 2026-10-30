@@ -4,7 +4,7 @@
 MIT 许可。执行核心使用 C11，窗口后端使用 Objective-C/AppKit，编译工具为系统 Clang 和 Make。
 
 当前原型已经执行专门构建的 32 位、64 位 Windows PE 示例，完成控制台输出和文件读写。
-项目包含独立实现的 PE 解析与加载、x86 指令解释器、Windows 调用约定和 82 个接口入口。
+项目包含独立实现的 PE 解析与加载、x86 指令解释器、Windows 调用约定和 89 个接口入口。
 Wine、CrossOver、Rosetta、Windows 虚拟机均不属于当前执行链。
 
 **这是很小的接口子集验证版。当前不能运行 DeepSeekQQ 安装器，也不能运行一般的 Python、Qt、Electron、.NET 桌面软件。**
@@ -62,7 +62,8 @@ python3 examples/build.py
 | PE 子进程、命令行、模块路径、退出状态 | 子进程通过另一个 LeanWin 实例运行；启动参数受限 |
 | 线程区域设置、默认语言、区域数据与序数比较 | 固定 en-US / zh-CN / invariant 数据；大小写转换仅支持 ASCII |
 | 控制台和同步文件接口 | 无重叠 I/O、命名管道或设备接口；只支持指定参数子集 |
-| 模块句柄和动态查找已实现接口 | 不加载任意 DLL；不支持按序号解析接口 |
+| 模块句柄和动态查找已实现接口 | KERNEL32 / KERNELBASE、USER32、COMCTL32；不加载任意 DLL，不支持按序号解析 |
+| 窗口类注册、名称/atom 查询、注销和公共控件类登记 | 仅类元数据；无窗口实例、消息循环或控件绘制 |
 | `MessageBoxW` 到按需加载的 AppKit 模块 | 仅计划支持 `MB_OK`、空父窗口；实际显示尚未验证 |
 
 执行用客体映像限制为 64 MiB；每个客体进程累计最多创建 16 个线程（含主线程），每个栈为 1 MiB。
@@ -115,7 +116,26 @@ TLS 模板、索引地址和回调表必须在客体映像内，回调目标必�
 `SwitchToThread`, `TlsAlloc`, `TlsFree`, `TlsGetValue`, `TlsSetValue`, `InitializeCriticalSection`,
 `EnterCriticalSection`, `LeaveCriticalSection`, `DeleteCriticalSection`。
 
-`USER32.dll`：`MessageBoxW`。
+`USER32.dll`：`MessageBoxW`, `RegisterClassW`, `RegisterClassExW`, `GetClassInfoW`, `GetClassInfoExW`, `UnregisterClassW`。
+
+`COMCTL32.dll`：`InitCommonControls`, `InitCommonControlsEx`。
+
+### 窗口类基础
+
+独立的 `src/classes.c` 保存每个客体进程的窗口类；支持复制类名、ASCII 大小写无关查询、
+class atom、重复注册检查、注销和 Windows 32 / 64 位结构布局。类名和菜单名副本保存在客体只读区，
+首次使用时按需分配 128 KiB；最多 128 个类（含内置类），类名限 255 个 ASCII 字符。
+菜单名支持最多 255 个 UTF-16 单元或整数资源编号。自定义类仅支持当前 EXE 的可执行回调地址，
+类/窗口附加字节数分别限 0..4096；这些字段目前仅登记，尚无窗口实例或附加数据访问接口。
+图标、光标、自定义画刷、全局类和其他模块实例暂不支持，返回错误 50。
+
+`InitCommonControls` 按旧版 v5 的 `ICC_WIN95_CLASSES` 范围登记；`InitCommonControlsEx` 累积登记
+列表、树、工具栏、状态栏、滑块、提示、标签、进度、上下箭头、热键、动画、日期、ComboBoxEx、
+ReBar、IP 地址和 pager 类。User32 基础类可直接查询。v6 激活上下文、SysLink、NativeFontCtl 未实现。
+
+**这里只提供类登记与查询基础，不代表这些控件能够显示。** 内置类的过程字段是客体不透明标识，
+直接执行时明确报错；其样式和附加字节字段目前为原型默认值 0，不宣称与 Windows 内部控件布局一致。
+尚无 `CreateWindowExW`、`CallWindowProcW`、窗口过程分发或消息循环。
 
 其中 `GetStdHandle` 仅提供标准输出、标准错误；`CloseHandle` 关闭普通文件、事件、线程和子进程句柄。
 `CreateFileW` 仅支持普通文件、读/写通用访问、零共享、空安全属性/模板和普通文件属性。
@@ -192,18 +212,19 @@ DeepSeekQQ 的实际导入分析与阻断原因见 [reports/deepseekqq.json](rep
 
 ## 本机验证记录
 
-2026-10-29，在 Apple Silicon macOS 上：124 项测试在普通版和 AddressSanitizer /
+2026-10-30，在 Apple Silicon macOS 上：137 项测试在普通版和 AddressSanitizer /
 UndefinedBehaviorSanitizer 版中分别通过；额外检查 120 个固定种子的变异 PE 分析输入、
-120 个变异 TLS 执行输入、120 个变异资源目录执行输入、120 个变异 x87 环境输入，以及 4 个实际执行示例。
+120 个变异 TLS 执行输入、120 个变异资源目录执行输入、120 个变异 x87 环境输入、
+120 个变异窗口类结构输入（合计 600 个），以及 4 个实际执行示例。
 可用 `python3 tools/sanitize.py` 重新构建并运行这些检查；结果写入
 [reports/validation.json](reports/validation.json)。
 
-当前核心可执行文件约 104 KiB；可选窗口模块约 50 KiB，精确字节数见测量报告。
+当前核心可执行文件约 120 KiB；可选窗口模块约 50 KiB，精确字节数见测量报告。
 控制台小示例的新进程启动与执行测量见报告中的各架构中位数；不以单次数字代替真实软件性能。
 这些数字仅对应仓库内的微型示例和本机环境，不能外推到一般 Windows 应用。
-DeepSeekQQ 安装器分析到 153 个静态导入项，其中 78 项入口名称尚未实现；严格模式首先停在
-`kernel32.dll!GetFullPathNameW`。诊断模式执行了 12,100 条指令、28 次接口调用，停在
-`comctl32.dll!InitCommonControls`（调用位置 `0x40fc28`）。上次的 x87 初始化阻断已越过；
+DeepSeekQQ 安装器分析到 153 个静态导入项，其中 77 项入口名称尚未实现；严格模式首先停在
+`kernel32.dll!GetFullPathNameW`。诊断模式执行了 12,711 条指令、32 次接口调用，停在
+`LOCK INC [EAX-8]`（指令位置 `0x407fc2`）。公共控件初始化以及后续字节赋值、字符串扫描和返回路径已越过；
 尚未进入安装界面，也未验证安装器 TLS 生命周期完成。
 完整缺失清单见 [reports/deepseekqq-imports.json](reports/deepseekqq-imports.json)。
 静态导入项数量不等于完整依赖数量，也不是兼容性百分比。
@@ -218,8 +239,8 @@ python3 tools/smoke.py --runner ./build/leanwin --output reports/smoke.json
 python tools/smoke.py --output reports/windows-native.json
 ```
 
-GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 52 项原生执行检查。
-新增 x87 控制状态、线程隔离和两种环境格式的 8 项对照用例。
+GitHub Actions 配置了 macOS / Linux 的完整内存检测，以及 Windows 的 68 项原生执行检查。
+这轮增加了窗口类/公共控件和启动指令的 16 项对照用例。
 2026-10-29 的[x87 控制状态跨系统验证](https://github.com/MoFanMon/LeanWin/actions/runs/40880700187)全部通过，
 准确的测试提交、任务与计数记录在 [reports/ci.json](reports/ci.json)，52 项 Windows 结果见
 [reports/windows-native.json](reports/windows-native.json)。本机 `validation.json` 仅记录本机检查，Windows 结果由独立 CI 任务提供。
@@ -240,7 +261,7 @@ Windows 接口 → POSIX 文件/进程接口
 
 1. 增加编译器生成的 Win32 测试程序，并扩展真实 Windows 上的接口语义与界面验证。
 2. 补全加载环境：PEB/TEB、进程退出通知、DLL TLS、重定位和异常；扩展现有堆与线程调度的参数语义。
-3. 实现 x87 数值栈与浮点运算，再扩充 NLS 和 SIMD 覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
+3. 补齐安装器接下来需要的 LOCK / 原子内存操作、x87 数值栈与浮点运算，再扩充 NLS 和 SIMD 覆盖；用基本块缓存/JIT 逐步替代解释器热点，验证收益后再优化。
 4. 实现真实窗口、消息循环和 GDI，再扩展通用控件、注册表、COM 与进程间协作。
 5. 以 DeepSeekQQ / Inno Setup 的导入清单建立回归目标。运行安装器之后，还需要兼容应用本体、QQ 和 NapCat 的完整依赖链。
 
@@ -253,6 +274,9 @@ Windows 接口 → POSIX 文件/进程接口
 - [Windows x64 调用约定](https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention)
 - [Intel 指令参考手册](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
 - [VerifyVersionInfoW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-verifyversioninfow)
+- [InitCommonControlsEx](https://learn.microsoft.com/en-us/windows/win32/api/commctrl/nf-commctrl-initcommoncontrolsex)
+- [RegisterClassExW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerclassexw)
+- [GetClassInfoExW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclassinfoexw)
 - [CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
 - [VirtualAlloc](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc)
 - [CreateProcessW](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw)

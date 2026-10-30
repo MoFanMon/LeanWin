@@ -10,11 +10,114 @@ ROOT = Path(__file__).resolve().parents[1]
 CLI = Path(os.environ.get("LEANWIN_CLI", ROOT/"build/leanwin"))
 
 
+def byte_immediate_probe(bits=64):
+    p=Probe([],bits)
+    initial=0x1122334455667788 if bits==64 else 0x55667788
+    for code in range(8):
+        target=code if code<4 else code-4
+        p.mov(target,initial)
+        p.emit(bytes([0xb0+code,0xa5]))
+        p.copy(0,target)
+        expected=(initial & ~0xff)|0xa5 if code<4 else (initial & ~0xff00)|0xa500
+        p.mov(2,expected)
+        p.require((b"\x48" if bits==64 else b"")+b"\x39\xd0")
+    if bits==64:
+        # A bare REX selects SIL rather than DH; REX.B selects r8b..r15b.
+        for target in (5,6,7,*range(8,16)):
+            p.mov(target,initial)
+            p.emit(bytes([0x41 if target>=8 else 0x40,0xb0+(target & 7),0x5a]))
+            p.copy(0,target); p.mov(2,(initial & ~0xff)|0x5a); p.require(b"\x48\x39\xd0")
+        p.copy(6,4); p.emit(b"\x40\xb4\x5a"); p.copy(0,4); p.copy(4,6)
+        p.emit(b"\x25\xff\0\0\0"); p.equal(0x5a)
+    # MOV must leave the carry flag from CMP unchanged.
+    p.mov(0,0); p.emit(b"\x83\xf8\x01\xb2\x01"); p.require(b"",0x83)
+    p.finish(); return p
+
+
+def repeat_return_probe(bits=64):
+    p=Probe([],bits); calls=[]
+    for count in (0,3):
+        p.mov(1,count); p.mov(0,0); p.emit(b"\x83\xf8\x01\xe8\0\0\0\0")
+        calls.append(len(p.code)-4)
+        p.require(b"",0x83); p.equal(42)
+        p.copy(0,1); p.equal(count)
+    p.finish(); target=len(p.code)
+    p.mov(0,42); p.emit(b"\xf3\xc3")
+    for offset in calls: struct.pack_into("<i",p.code,offset,target-offset-4)
+    return p
+
+
+def scan_probe(bits=64):
+    p=Probe([],bits)
+    for width in (1,2,4,*([8] if bits==64 else [])):
+        data=p.blob(b"".join(n.to_bytes(width,"little") for n in (7,7,9,0)))
+        suffix=(b"\x66" if width==2 else b"\x48" if width==8 else b"")+bytes([0xae if width==1 else 0xaf])
+        for prefix,value,count,consumed,zero,backward in [
+                (b"\xf2",9,4,3,True,False),
+                (b"\xf3",7,4,3,False,False),
+                (b"\xf2",8,2,2,False,False),
+                (b"\xf2",7,4,2,True,True),
+                (b"",7,4,1,True,False)]:
+            start=p.base+data+(2*width if backward else 0)
+            p.mov(0,value); p.mov(7,start); p.mov(1,count)
+            p.emit(b"\x68"+struct.pack("<I",0x402 if backward else 0x202)+b"\x9d")
+            p.emit(prefix+suffix)
+            p.require(b"",0x85 if zero else 0x84)
+            p.emit(b"\xfc"); p.copy(0,1); p.equal(count-consumed if prefix else count)
+            p.copy(0,7); p.mov(2,start+(-consumed if backward else consumed)*width)
+            p.require((b"\x48" if bits==64 else b"")+b"\x39\xd0")
+    # Zero-count REP must neither access an invalid destination nor change flags.
+    p.mov(7,1); p.mov(1,0); p.mov(0,0)
+    p.emit(b"\x83\xf8\x01\xf2\xae"); p.require(b"",0x83)
+    p.finish(); return p
+
+
+def not_probe(bits=64):
+    p=Probe([],bits); data=p.blob(b"\x12\x34\x56\x78\x9a\xbc\xde\xf0")
+    p.mov(0,0); p.emit(b"\x83\xf8\x01")
+    p.mov(1,0x12345678); p.emit(b"\xf7\xd1"); p.require(b"",0x83)
+    p.copy(0,1); p.equal(0xedcba987)
+    p.mov(1,0x12345678); p.emit(b"\x66\xf7\xd1"); p.copy(0,1); p.equal(0x1234a987)
+    p.mov(3,p.base+data); p.emit(b"\xf6\x13"); p.require(b"\x81\x3b\xed\x34\x56\x78")
+    if bits==64:
+        p.mov(9,0x0123456789abcdef); p.emit(b"\x49\xf7\xd1"); p.copy(0,9)
+        p.mov(2,0xfedcba9876543210); p.require(b"\x48\x39\xd0")
+    p.finish(); return p
+
+
 class StartupInstructionTests(unittest.TestCase):
-    def run_probe(self, p):
+    def run_probe(self, p, max_steps=1000000):
         with tempfile.TemporaryDirectory() as folder:
             exe = Path(folder)/"cpu.exe"; exe.write_bytes(p.image())
-            return subprocess.run([str(CLI), "run", str(exe), "--root", str(Path(folder)/"drive")], capture_output=True, timeout=5)
+            return subprocess.run([str(CLI), "run", str(exe), "--root", str(Path(folder)/"drive"),
+                "--max-steps",str(max_steps)], capture_output=True, timeout=5)
+
+    def test_byte_immediates_preserve_other_bits_flags_and_rex_register_selection(self):
+        for bits in (32,64):
+            with self.subTest(bits=bits):
+                r=self.run_probe(byte_immediate_probe(bits)); self.assertEqual(r.returncode,0,r.stderr)
+
+    def test_rep_ret_returns_once_without_consuming_count_or_changing_flags(self):
+        for bits in (32,64):
+            with self.subTest(bits=bits):
+                r=self.run_probe(repeat_return_probe(bits)); self.assertEqual(r.returncode,0,r.stderr)
+
+    def test_string_scans_stop_on_equality_mismatch_count_and_direction(self):
+        for bits in (32,64):
+            with self.subTest(bits=bits):
+                r=self.run_probe(scan_probe(bits)); self.assertEqual(r.returncode,0,r.stderr)
+
+    def test_not_preserves_flags_and_complements_only_the_operand_width(self):
+        for bits in (32,64):
+            with self.subTest(bits=bits):
+                r=self.run_probe(not_probe(bits)); self.assertEqual(r.returncode,0,r.stderr)
+
+    def test_repeated_scan_checks_page_boundary_and_instruction_budget(self):
+        p=Probe(["VirtualAlloc"])
+        p.invoke("VirtualAlloc",[0,4096,0x3000,4]); p.nonzero(); p.copy(7,0)
+        p.mov(0,1); p.mov(1,5000); p.emit(b"\xf2\xae"); p.exit(99)
+        r=self.run_probe(p); self.assertEqual(r.returncode,65,r.stderr); self.assertIn(b"protection violation",r.stderr)
+        r=self.run_probe(p,100); self.assertEqual(r.returncode,65,r.stderr); self.assertIn(b"instruction budget exhausted",r.stderr)
 
     def test_adc_and_sbb_consume_carry_and_produce_overflow_and_borrow(self):
         for bits in (32,64):
