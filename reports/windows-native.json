@@ -172,6 +172,46 @@
       "exit_code": 0
     },
     {
+      "name": "atomic-arithmetic32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-immediate32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-exchange32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-thread32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "short-exchange32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-flags32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "register-exchange32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-prefix32",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
       "name": "console64",
       "status": "PASS",
       "exit_code": 37
@@ -338,6 +378,46 @@
     },
     {
       "name": "not64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-arithmetic64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-immediate64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-exchange64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-thread64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "short-exchange64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-flags64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "register-exchange64",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    {
+      "name": "atomic-prefix64",
       "status": "PASS",
       "exit_code": 0
     }

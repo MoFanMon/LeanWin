@@ -46,5 +46,6 @@
   "previous_deferred_instruction_count": 12711,
   "visible_installer_window": false,
   "installation_completed": false,
-  "note": "Startup passed locked reference-count updates and subsequent register exchanges. Registry APIs, control instances, installer GUI and installation compatibility remain unimplemented."
+  "note": "Startup passed locked reference-count updates and subsequent register exchanges. Registry APIs, control instances, installer GUI and installation compatibility remain unimplemented.",
+  "tested_runtime_commit": "d6e8871fde3d849f605f3429cfc551f66b5d4ac9"
 }
